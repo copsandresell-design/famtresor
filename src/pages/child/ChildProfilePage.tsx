@@ -5,11 +5,11 @@ import { AnimatePresence } from 'framer-motion'
 import { PhotoLightbox } from '../../components/photos/PhotoLightbox'
 import { PhotoThumb } from '../../components/photos/PhotoThumb'
 import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
+import { AvatarEditorModal } from '../../components/ui/AvatarEditorModal'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ChildAvatar } from '../../components/ui/ChildAvatar'
 import { cn } from '../../lib/cn'
-import { AVATAR_EMOJIS } from '../../lib/categories'
 import { computeBadges } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
 import { formatEuro, formatRelative } from '../../lib/format'
@@ -23,10 +23,8 @@ export function ChildProfilePage() {
   const transactions = useStore((s) => s.transactions)
   const submissions = useStore((s) => s.submissions)
   const messages = useStore((s) => s.messages)
-  const updateChild = useStore((s) => s.updateChild)
   const logout = useStore((s) => s.logout)
-  const toast = useStore((s) => s.toast)
-  const [pickingAvatar, setPickingAvatar] = useState(false)
+  const [editingAvatar, setEditingAvatar] = useState(false)
   const [lightbox, setLightbox] = useState<{ ids: string[]; index: number } | null>(null)
 
   const children = users.filter((u) => u.role === 'child' && u.isActive)
@@ -94,13 +92,7 @@ export function ChildProfilePage() {
       <h1 className="text-2xl font-black">Mon profil</h1>
 
       <Card className="flex flex-col items-center gap-3 p-6">
-        <button
-          onClick={() => setPickingAvatar(!pickingAvatar)}
-          aria-label="Changer d'avatar"
-          className="cursor-pointer rounded-full transition-transform hover:scale-105"
-        >
-          <ChildAvatar user={user} size="xl" />
-        </button>
+        <ChildAvatar user={user} size="xl" onClick={() => setEditingAvatar(true)} />
         <p className="font-display text-xl font-bold">{user.name}</p>
         <AnimatedBalance
           cents={computeBalance(transactions, user.id)}
@@ -110,29 +102,6 @@ export function ChildProfilePage() {
           <p className="rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
             {medals[rank - 1] ?? '🏅'} {rank === 1 ? 'MVP du mois !' : `${rank}ᵉ ce mois-ci`}
           </p>
-        )}
-        {pickingAvatar && (
-          <div className="flex flex-wrap justify-center gap-1.5 pt-2">
-            {AVATAR_EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => {
-                  updateChild(user.id, { avatar: emoji }, user.id)
-                  setPickingAvatar(false)
-                  toast('Nouvel avatar ! 😎')
-                }}
-                aria-pressed={user.avatar === emoji}
-                className={cn(
-                  'rounded-lg p-1.5 text-2xl cursor-pointer',
-                  user.avatar === emoji
-                    ? 'bg-amber-200 dark:bg-amber-400/30'
-                    : 'hover:bg-slate-100 dark:hover:bg-slate-800',
-                )}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
         )}
       </Card>
 
@@ -200,9 +169,13 @@ export function ChildProfilePage() {
               const from = users.find((u) => u.id === message.fromId)
               return (
                 <div key={message.id} className="flex items-start gap-3 px-4 py-3">
-                  <span className="text-xl" aria-hidden>
-                    {from?.avatar ?? '💬'}
-                  </span>
+                  {from ? (
+                    <ChildAvatar user={from} size="sm" />
+                  ) : (
+                    <span className="text-xl" aria-hidden>
+                      💬
+                    </span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">{message.text}</p>
                     <p className="text-xs text-slate-400">
@@ -246,6 +219,10 @@ export function ChildProfilePage() {
           />
         )}
       </AnimatePresence>
+
+      {editingAvatar && (
+        <AvatarEditorModal user={user} actorId={user.id} onClose={() => setEditingAvatar(false)} />
+      )}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { PhotoPicker, type PickedPhoto } from '../../components/photos/PhotoPicker'
 import { Amount } from '../../components/ui/Amount'
 import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
+import { AvatarEditorModal } from '../../components/ui/AvatarEditorModal'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ChildAvatar } from '../../components/ui/ChildAvatar'
@@ -15,7 +16,7 @@ import { computeBadges, type BadgeState } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
 import { DIFFICULTIES } from '../../lib/categories'
 import { celebrate } from '../../lib/confetti'
-import { childGradient } from '../../lib/colors'
+import { childGradient, gradientEnd } from '../../lib/colors'
 import { formatEuro, formatRelative } from '../../lib/format'
 import { isTaskAvailable } from '../../lib/recurrence'
 import { computeStreak } from '../../lib/streak'
@@ -75,6 +76,7 @@ export function ChildHomePage() {
   const [photos, setPhotos] = useState<PickedPhoto[]>([])
   const [comment, setComment] = useState('')
   const [unlockedBadge, setUnlockedBadge] = useState<BadgeState | null>(null)
+  const [editingAvatar, setEditingAvatar] = useState(false)
 
   const childId = user?.id
 
@@ -88,7 +90,7 @@ export function ChildHomePage() {
         (s) => s.childId === childId && s.status === 'approved' && (s.reviewedAt ?? 0) > lastSeen,
       )
       if (fresh.length > 0) {
-        celebrate()
+        celebrate([user!.color, gradientEnd(user!.color)])
         toast(`${fresh.length > 1 ? `${fresh.length} tâches validées` : 'Tâche validée'} pendant ton absence ! 🎉`)
       }
       await db.setItem(key, Date.now())
@@ -122,7 +124,7 @@ export function ChildHomePage() {
       if (seen !== null) {
         const fresh = unlocked.find((b) => !seen.includes(b.id))
         if (fresh) {
-          celebrate()
+          celebrate([user!.color, gradientEnd(user!.color)])
           setUnlockedBadge(fresh)
         }
       }
@@ -172,7 +174,7 @@ export function ChildHomePage() {
         className="flex flex-col items-center gap-2 rounded-3xl p-7 text-center text-white shadow-lg"
         style={{ background: childGradient(user.color) }}
       >
-        <ChildAvatar user={user} size="lg" />
+        <ChildAvatar user={user} size="lg" onClick={() => setEditingAvatar(true)} />
         <p className="font-display text-lg font-bold">{user.name}</p>
         <AnimatedBalance cents={balance} className="font-display text-6xl font-bold drop-shadow-sm" />
         {streak.count > 0 && (
@@ -316,6 +318,10 @@ export function ChildHomePage() {
           <BadgeUnlockModal badge={unlockedBadge} onClose={() => setUnlockedBadge(null)} />
         )}
       </AnimatePresence>
+
+      {editingAvatar && (
+        <AvatarEditorModal user={user} actorId={user.id} onClose={() => setEditingAvatar(false)} />
+      )}
     </div>
   )
 }

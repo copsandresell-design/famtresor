@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ChildLayout } from './components/layout/ChildLayout'
 import { ParentLayout } from './components/layout/ParentLayout'
+import { AmbientBackground } from './components/ui/AmbientBackground'
 import { Toaster } from './components/Toaster'
 import { LoginPage } from './pages/LoginPage'
 import { ChildHistoryPage } from './pages/child/ChildHistoryPage'
@@ -73,6 +74,7 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
+        <AmbientBackground />
         <Routes>
           {!session && <Route path="*" element={<LoginPage />} />}
           {session?.role === 'parent' && (

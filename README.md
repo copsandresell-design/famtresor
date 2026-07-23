@@ -46,15 +46,22 @@ tâches du jour avec « Je l'ai fait ! », **jusqu'à 5 photos de preuve**
 (caméra ou galerie, compressées en local) + commentaire, case ⭐ initiative,
 **9 badges à débloquer** avec barres de progression et modal de célébration,
 **messages reçus des parents**, **galerie des photos validées**, rang familial
-du mois, historique en timeline. Confettis à chaque validation.
+du mois, historique en timeline. Confettis à chaque validation (couleurs de
+l'enfant concerné).
+
+**Tous les utilisateurs** (Marion, Julien, Lorenzo, Kelly) peuvent changer
+leur avatar : clic sur leur photo/emoji (accueil enfant, profil enfant,
+sidebar parent, ou depuis Enfants pour un parent qui édite un enfant) → ouvre
+📷 Caméra / 🖼️ Galerie / 🗑️ Supprimer la photo / ou choix parmi les emojis.
 
 ## Design V2
 
 Thème sombre par défaut (slate-950), dégradés par enfant (Lorenzo bleu→cyan,
 Kelly rose→violet), boutons en dégradé (primaire bleu→violet→rose, succès
 émeraude→citron), titres et chiffres en Poppins, anneaux d'avatar en dégradé,
-animations d'entrée en cascade. Le thème clair reste entièrement stylé
-(Réglages → Apparence).
+fond décoratif (deux halos dégradés qui dérivent lentement, discrets et
+`aria-hidden`), animations d'entrée en cascade. Le thème clair reste
+entièrement stylé (Réglages → Apparence).
 
 ## Règles métier
 
@@ -69,7 +76,10 @@ animations d'entrée en cascade. Le thème clair reste entièrement stylé
 - Codes hachés (SHA-256 salé, Web Crypto). Données dans IndexedDB via
   localforage. **Nécessite un contexte sécurisé** (localhost ou HTTPS).
 - Photos compressées côté client (Canvas, max 1280 px JPEG 0.8 + miniature
-  240 px), stockées dans IndexedDB — jamais envoyées nulle part.
+  240 px), stockées dans IndexedDB — jamais envoyées nulle part. Les photos
+  de profil réutilisent exactement ce même pipeline (`User.photoId` pointe
+  vers une entrée du même store `photos` que les preuves de tâches) —
+  pas de table ni de compression dupliquée.
 - Badges **calculés à la volée** depuis les transactions/soumissions (aucun
   état à stocker, impossible qu'ils divergent) ; seuls les badges « déjà vus »
   sont mémorisés pour l'animation de déblocage. Seuils calibrés sur des tâches

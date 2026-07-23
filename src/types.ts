@@ -18,6 +18,7 @@ export interface User {
   secretSalt: string
   usesDefaultSecret: boolean
   avatar: string
+  photoId?: string
   color: string
   createdAt: number
   isActive: boolean

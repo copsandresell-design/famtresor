@@ -17,6 +17,8 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { useCurrentUser, useStore } from '../../store/useStore'
+import { AvatarEditorModal } from '../ui/AvatarEditorModal'
+import { ChildAvatar } from '../ui/ChildAvatar'
 
 const links = [
   { to: '/parent', label: 'Accueil', icon: Home, end: true },
@@ -49,6 +51,7 @@ export function ParentLayout() {
   const touchSession = useStore((s) => s.touchSession)
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [editingAvatar, setEditingAvatar] = useState(false)
 
   useEffect(() => {
     touchSession()
@@ -81,9 +84,18 @@ export function ParentLayout() {
   return (
     <div className="min-h-dvh lg:flex">
       <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:gap-1 lg:border-r lg:border-slate-200 lg:bg-white lg:p-4 dark:lg:border-slate-800 dark:lg:bg-slate-900">
-        <p className="mb-4 px-3 text-lg font-black">
+        <p className="mb-2 px-3 text-lg font-black">
           💰 {settings.familyName}
         </p>
+        {user && (
+          <button
+            onClick={() => setEditingAvatar(true)}
+            className="mb-3 flex items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+          >
+            <ChildAvatar user={user} size="sm" />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{user.name}</span>
+          </button>
+        )}
         {links.map((l) => navItem(l))}
         <div className="mt-auto border-t border-slate-200 pt-3 dark:border-slate-800">
           <button
@@ -143,6 +155,15 @@ export function ParentLayout() {
                   <X size={20} />
                 </button>
               </div>
+              {user && (
+                <button
+                  onClick={() => setEditingAvatar(true)}
+                  className="mb-2 flex items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <ChildAvatar user={user} size="sm" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{user.name}</span>
+                </button>
+              )}
               {links.map((l) => navItem(l))}
               <button
                 onClick={logout}
@@ -155,6 +176,10 @@ export function ParentLayout() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {editingAvatar && user && (
+        <AvatarEditorModal user={user} actorId={user.id} onClose={() => setEditingAvatar(false)} />
+      )}
     </div>
   )
 }

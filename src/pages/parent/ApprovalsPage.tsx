@@ -13,6 +13,7 @@ import { inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { Tabs } from '../../components/ui/Tabs'
 import { celebrate } from '../../lib/confetti'
+import { gradientEnd } from '../../lib/colors'
 import { formatEuro, formatRelative } from '../../lib/format'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { SubmissionStatus, TaskSubmission, User } from '../../types'
@@ -190,7 +191,7 @@ export function ApprovalsPage() {
                     size="sm"
                     onClick={() => {
                       approve(sub.id, user.id)
-                      celebrate()
+                      celebrate([child.color, gradientEnd(child.color)])
                       toast(`Validé ! ${child.name} gagne ${formatEuro(total)}.`)
                       setMessaging(child)
                     }}

@@ -15,6 +15,7 @@ export const ACTION_LABELS: Record<string, string> = {
   secret_changed: 'Code modifié',
   settings_updated: 'Réglages modifiés',
   message_sent: 'Message envoyé',
+  avatar_changed: 'Avatar modifié',
 }
 
 export function actionLabel(action: string): string {

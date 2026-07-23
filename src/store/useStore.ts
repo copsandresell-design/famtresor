@@ -74,6 +74,11 @@ interface Store {
     patch: Partial<Pick<User, 'name' | 'avatar' | 'color' | 'isActive'>>,
     actorId: string,
   ) => void
+  updateAvatar: (
+    userId: string,
+    patch: { avatar?: string; photoId?: string | null },
+    actorId: string,
+  ) => void
   changeSecret: (userId: string, newSecret: string, actorId: string) => Promise<void>
   updateSettings: (patch: Partial<Settings>, actorId: string) => void
 }
@@ -360,6 +365,21 @@ export const useStore = create<Store>((set, get) => {
       set((s) => ({ users: s.users.map((u) => (u.id === childId ? { ...u, ...patch } : u)) }))
       const child = get().users.find((u) => u.id === childId)
       pushLog('child_updated', actorId, `${child?.name ?? '?'} : ${Object.keys(patch).join(', ')}`, childId)
+      persist('users')
+    },
+
+    updateAvatar: (userId, patch, actorId) => {
+      set((s) => ({
+        users: s.users.map((u) => {
+          if (u.id !== userId) return u
+          const next = { ...u }
+          if (patch.avatar !== undefined) next.avatar = patch.avatar
+          if (patch.photoId !== undefined) next.photoId = patch.photoId ?? undefined
+          return next
+        }),
+      }))
+      const user = get().users.find((u) => u.id === userId)
+      pushLog('avatar_changed', actorId, `Avatar de ${user?.name ?? '?'} modifié`, userId)
       persist('users')
     },
 

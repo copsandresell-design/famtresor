@@ -4,6 +4,7 @@ import { KeyRound, RotateCcw, ScrollText } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
+import { AvatarEditorModal } from '../../components/ui/AvatarEditorModal'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -12,7 +13,6 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
-import { AVATAR_EMOJIS } from '../../lib/categories'
 import { computeBalance } from '../../lib/balance'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { User } from '../../types'
@@ -24,17 +24,19 @@ function EditChildModal({ child, onClose }: { child: User; onClose: () => void }
   const updateChild = useStore((s) => s.updateChild)
   const changeSecret = useStore((s) => s.changeSecret)
   const toast = useStore((s) => s.toast)
+  // Référence toujours à jour (l'avatar/photo peut changer via le modal imbriqué ci-dessous).
+  const liveChild = useStore((s) => s.users.find((u) => u.id === child.id)) ?? child
 
   const [name, setName] = useState(child.name)
-  const [avatar, setAvatar] = useState(child.avatar)
   const [color, setColor] = useState(child.color)
   const [pin, setPin] = useState('')
+  const [editingAvatar, setEditingAvatar] = useState(false)
 
   if (!user) return null
 
   async function submit() {
     if (!name.trim()) return
-    updateChild(child.id, { name: name.trim(), avatar, color }, user!.id)
+    updateChild(child.id, { name: name.trim(), color }, user!.id)
     if (pin) {
       if (!/^\d{4}$/.test(pin)) {
         toast('Le PIN doit faire exactement 4 chiffres.', 'error')
@@ -53,24 +55,7 @@ function EditChildModal({ child, onClose }: { child: User; onClose: () => void }
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="Avatar">
-          <div className="flex flex-wrap gap-1.5">
-            {AVATAR_EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => setAvatar(emoji)}
-                aria-pressed={avatar === emoji}
-                className={cn(
-                  'rounded-lg p-1.5 text-xl cursor-pointer',
-                  avatar === emoji
-                    ? 'bg-amber-200 dark:bg-amber-400/30'
-                    : 'hover:bg-slate-100 dark:hover:bg-slate-800',
-                )}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
+          <ChildAvatar user={liveChild} size="lg" onClick={() => setEditingAvatar(true)} />
         </Field>
         <Field label="Couleur">
           <div className="flex gap-2">
@@ -107,6 +92,10 @@ function EditChildModal({ child, onClose }: { child: User; onClose: () => void }
           <Button onClick={() => void submit()}>Sauvegarder</Button>
         </div>
       </div>
+
+      {editingAvatar && (
+        <AvatarEditorModal user={liveChild} actorId={user.id} onClose={() => setEditingAvatar(false)} />
+      )}
     </Modal>
   )
 }
