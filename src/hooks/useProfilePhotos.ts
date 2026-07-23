@@ -32,21 +32,25 @@ export const useProfilePhotos = () => {
     fetchPhotos()
 
     // Subscribe to real-time updates
-    const subscription = supabase
-      .from('profile_photos')
-      .on('*', (payload) => {
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const { user_id, photo_url } = payload.new as Database['public']['Tables']['profile_photos']['Row']
-          setPhotos(prev => ({
-            ...prev,
-            [user_id]: photo_url
-          }))
+    const channel = supabase
+      .channel('profile_photos-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profile_photos' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const { user_id, photo_url } = payload.new as Database['public']['Tables']['profile_photos']['Row']
+            setPhotos(prev => ({
+              ...prev,
+              [user_id]: photo_url
+            }))
+          }
         }
-      })
+      )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [])
 

@@ -107,6 +107,17 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['audit_logs']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['audit_logs']['Row']>
       }
+      profile_photos: {
+        Row: {
+          id: string
+          user_id: string
+          photo_url: string
+          uploaded_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['profile_photos']['Row'], 'id' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['profile_photos']['Row']>
+      }
     }
   }
 }
