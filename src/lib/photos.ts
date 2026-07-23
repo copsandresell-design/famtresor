@@ -28,7 +28,7 @@ async function drawScaled(bitmap: ImageBitmap, maxSize: number, quality: number)
   })
 }
 
-/** Compresse (max 1280px, JPEG 0.8) + miniature 240px, stocke dans IndexedDB + Supabase, retourne l'id. */
+/** Compresse (max 1280px, JPEG 0.8) + miniature 240px, stocke dans IndexedDB + localStorage, retourne l'id. */
 export async function addPhoto(file: File, userId?: string): Promise<string> {
   const bitmap = await createImageBitmap(file)
   const [full, thumb] = await Promise.all([drawScaled(bitmap, 1280, 0.8), drawScaled(bitmap, 240, 0.7)])
@@ -36,46 +36,21 @@ export async function addPhoto(file: File, userId?: string): Promise<string> {
   const photoId = uid()
   const photo: StoredPhoto = { id: photoId, full, thumb, createdAt: Date.now() }
 
-  // Stocke localement
+  // Stocke dans IndexedDB
   await photosDb.setItem(photoId, photo)
 
-  // Upload vers Supabase Storage + profile_photos table (pour sync)
+  // Si userId fourni, sauvegarde aussi dans localStorage pour sync cross-tab/session
   if (userId) {
     try {
-      const timestamp = Date.now()
-      const filename = `${userId}-${timestamp}.jpeg`
-      const filePath = `profile-photos/${filename}`
+      // Crée une clé unique user->photoId dans localStorage
+      const photoIndex = JSON.parse(localStorage.getItem('famtresor_user_photos') || '{}')
+      photoIndex[userId] = photoId
+      localStorage.setItem('famtresor_user_photos', JSON.stringify(photoIndex))
 
-      // Upload la version full à Supabase
-      const { error: uploadError } = await supabase.storage
-        .from('famtresor-photos')
-        .upload(filePath, full, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        })
-
-      if (!uploadError) {
-        const { data } = supabase.storage
-          .from('famtresor-photos')
-          .getPublicUrl(filePath)
-
-        const supabaseUrl = data.publicUrl
-
-        // Sauvegarde l'URL Supabase dans la table profile_photos pour sync real-time
-        await supabase
-          .from('profile_photos')
-          .upsert({
-            user_id: userId,
-            photo_url: supabaseUrl,
-            uploaded_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' })
-
-        // Stocke l'URL aussi localement pour référence
-        photo.supabaseUrl = supabaseUrl
-        await photosDb.setItem(photoId, photo)
-      }
+      // Déclenche événement custom pour synchro cross-tab
+      window.dispatchEvent(new CustomEvent('famtresor:photo-updated', { detail: { userId, photoId } }))
     } catch (e) {
-      console.warn('Supabase upload failed, using local only:', e)
+      console.warn('localStorage sync failed:', e)
     }
   }
 

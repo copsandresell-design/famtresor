@@ -1,7 +1,7 @@
 import { cn } from '../../lib/cn'
 import { childGradient } from '../../lib/colors'
 import { usePhotoUrl } from '../../lib/photos'
-import { useProfilePhotos } from '../../hooks/useProfilePhotos'
+import { useUserPhoto } from '../../hooks/useUserPhotos'
 import type { User } from '../../types'
 
 const sizes = {
@@ -20,10 +20,10 @@ interface Props {
 
 export function ChildAvatar({ user, size = 'md', onClick }: Props) {
   const localPhotoUrl = usePhotoUrl(user.photoId, 'thumb')
-  const { photos: supabasePhotos } = useProfilePhotos()
+  const storageSyncPhotoUrl = useUserPhoto(user.id)
 
-  // Priorité: Supabase (sync) > Local IndexedDB
-  const photoUrl = supabasePhotos[user.id] || localPhotoUrl
+  // Priorité: localStorage sync > Local IndexedDB
+  const photoUrl = storageSyncPhotoUrl || localPhotoUrl
 
   const visual = (
     <span
