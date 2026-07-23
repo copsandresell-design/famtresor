@@ -28,21 +28,25 @@ export const useTasks = () => {
     fetchTasks()
 
     // Subscribe to real-time updates
-    const subscription = supabase
-      .from('tasks')
-      .on('*', (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setTasks(prev => [...prev, payload.new as Database['public']['Tables']['tasks']['Row']])
-        } else if (payload.eventType === 'UPDATE') {
-          setTasks(prev => prev.map(t => t.id === payload.new.id ? payload.new as Database['public']['Tables']['tasks']['Row'] : t))
-        } else if (payload.eventType === 'DELETE') {
-          setTasks(prev => prev.filter(t => t.id !== payload.old.id))
+    const channel = supabase
+      .channel('tasks-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            setTasks(prev => [...prev, payload.new as Database['public']['Tables']['tasks']['Row']])
+          } else if (payload.eventType === 'UPDATE') {
+            setTasks(prev => prev.map(t => t.id === payload.new.id ? payload.new as Database['public']['Tables']['tasks']['Row'] : t))
+          } else if (payload.eventType === 'DELETE') {
+            setTasks(prev => prev.filter(t => t.id !== payload.old.id))
+          }
         }
-      })
+      )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [])
 
@@ -91,19 +95,23 @@ export const useSubmissions = () => {
     fetchSubmissions()
 
     // Subscribe to real-time updates
-    const subscription = supabase
-      .from('submissions')
-      .on('*', (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setSubmissions(prev => [...prev, payload.new as Database['public']['Tables']['submissions']['Row']])
-        } else if (payload.eventType === 'UPDATE') {
-          setSubmissions(prev => prev.map(s => s.id === payload.new.id ? payload.new as Database['public']['Tables']['submissions']['Row'] : s))
+    const channel = supabase
+      .channel('submissions-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'submissions' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            setSubmissions(prev => [...prev, payload.new as Database['public']['Tables']['submissions']['Row']])
+          } else if (payload.eventType === 'UPDATE') {
+            setSubmissions(prev => prev.map(s => s.id === payload.new.id ? payload.new as Database['public']['Tables']['submissions']['Row'] : s))
+          }
         }
-      })
+      )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [])
 
@@ -113,7 +121,7 @@ export const useSubmissions = () => {
     return data
   }, [])
 
-  const approveSubmission = useCallback(async (id: string, reviewedBy: string, bonus: boolean) => {
+  const approveSubmission = useCallback(async (id: string, reviewedBy: string, _bonus: boolean) => {
     const { error } = await supabase
       .from('submissions')
       .update({
@@ -176,17 +184,21 @@ export const useUsers = () => {
     fetchUsers()
 
     // Subscribe to real-time updates
-    const subscription = supabase
-      .from('users')
-      .on('*', (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          setUsers(prev => prev.map(u => u.id === payload.new.id ? payload.new as Database['public']['Tables']['users']['Row'] : u))
+    const channel = supabase
+      .channel('users-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        (payload: any) => {
+          if (payload.eventType === 'UPDATE') {
+            setUsers(prev => prev.map(u => u.id === payload.new.id ? payload.new as Database['public']['Tables']['users']['Row'] : u))
+          }
         }
-      })
+      )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [])
 
@@ -225,15 +237,19 @@ export const useTransactions = () => {
     fetchTransactions()
 
     // Subscribe to real-time updates
-    const subscription = supabase
-      .from('transactions')
-      .on('INSERT', (payload) => {
-        setTransactions(prev => [payload.new as Database['public']['Tables']['transactions']['Row'], ...prev])
-      })
+    const channel = supabase
+      .channel('transactions-changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'transactions' },
+        (payload: any) => {
+          setTransactions(prev => [payload.new as Database['public']['Tables']['transactions']['Row'], ...prev])
+        }
+      )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [])
 

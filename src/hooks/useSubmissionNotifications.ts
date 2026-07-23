@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 // Types de notifications
@@ -29,9 +29,12 @@ export const useSubmissionNotifications = (userId: string, userType: 'parent' | 
     if (userType !== 'parent') return // Seuls les parents reçoivent les notifs
 
     // Subscribe aux nouvelles soumissions
-    const subscription = supabase
-      .from('submissions')
-      .on('INSERT', async (payload) => {
+    const channel = supabase
+      .channel('submissions-insert-notifications')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'submissions' },
+        async (payload: any) => {
         const submission = payload.new as any
 
         // Récupère les infos de l'enfant et de la tâche
@@ -66,13 +69,14 @@ export const useSubmissionNotifications = (userId: string, userType: 'parent' | 
         // Broadcast à tous les listeners
         notificationCallbacks.forEach(cb => cb(notification))
 
-        // Play sound (optionnel)
-        playNotificationSound()
-      })
+          // Play sound (optionnel)
+          playNotificationSound()
+        }
+      )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [userId, userType])
 }
@@ -83,9 +87,12 @@ export const useApprovalNotifications = (userId: string, userType: 'parent' | 'c
     if (userType !== 'child') return // Seuls les enfants reçoivent les approbations
 
     // Subscribe aux mises à jour de soumissions (approbations)
-    const subscription = supabase
-      .from('submissions')
-      .on('UPDATE', async (payload) => {
+    const channel = supabase
+      .channel('submissions-update-notifications')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'submissions' },
+        async (payload: any) => {
         const submission = payload.new as any
 
         // Si c'est mon submission et status = approved
@@ -141,11 +148,12 @@ export const useApprovalNotifications = (userId: string, userType: 'parent' | 'c
           notificationCallbacks.forEach(cb => cb(notification))
           playNotificationSound('error')
         }
-      })
+        }
+      )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [userId, userType])
 }
