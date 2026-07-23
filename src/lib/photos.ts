@@ -1,6 +1,5 @@
 import localforage from 'localforage'
 import { useEffect, useState } from 'react'
-import { supabase } from './supabase'
 import { uid } from './id'
 
 export const photosDb = localforage.createInstance({ name: 'famtresor', storeName: 'photos' })
