@@ -32,7 +32,8 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
     if (!pending) return
     setBusy(true)
     try {
-      const id = await addPhoto(pending.file)
+      // Passe l'userId pour que la photo soit uploadée vers Supabase (sync cross-device)
+      const id = await addPhoto(pending.file, user.id)
       if (user.photoId) void deletePhoto(user.photoId)
       updateAvatar(user.id, { photoId: id }, actorId)
       toast('Photo de profil mise à jour !')

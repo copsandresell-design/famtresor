@@ -1,5 +1,6 @@
 import localforage from 'localforage'
 import { useEffect, useState } from 'react'
+import { supabase } from './supabase'
 import { uid } from './id'
 
 export const photosDb = localforage.createInstance({ name: 'famtresor', storeName: 'photos' })
@@ -9,6 +10,7 @@ export interface StoredPhoto {
   full: Blob
   thumb: Blob
   createdAt: number
+  supabaseUrl?: string // URL Supabase pour sync cross-device
 }
 
 async function drawScaled(bitmap: ImageBitmap, maxSize: number, quality: number): Promise<Blob> {
@@ -26,14 +28,58 @@ async function drawScaled(bitmap: ImageBitmap, maxSize: number, quality: number)
   })
 }
 
-/** Compresse (max 1280px, JPEG 0.8) + miniature 240px, stocke dans IndexedDB, retourne l'id. */
-export async function addPhoto(file: File): Promise<string> {
+/** Compresse (max 1280px, JPEG 0.8) + miniature 240px, stocke dans IndexedDB + Supabase, retourne l'id. */
+export async function addPhoto(file: File, userId?: string): Promise<string> {
   const bitmap = await createImageBitmap(file)
   const [full, thumb] = await Promise.all([drawScaled(bitmap, 1280, 0.8), drawScaled(bitmap, 240, 0.7)])
   bitmap.close()
-  const photo: StoredPhoto = { id: uid(), full, thumb, createdAt: Date.now() }
-  await photosDb.setItem(photo.id, photo)
-  return photo.id
+  const photoId = uid()
+  const photo: StoredPhoto = { id: photoId, full, thumb, createdAt: Date.now() }
+
+  // Stocke localement
+  await photosDb.setItem(photoId, photo)
+
+  // Upload vers Supabase Storage + profile_photos table (pour sync)
+  if (userId) {
+    try {
+      const timestamp = Date.now()
+      const filename = `${userId}-${timestamp}.jpeg`
+      const filePath = `profile-photos/${filename}`
+
+      // Upload la version full à Supabase
+      const { error: uploadError } = await supabase.storage
+        .from('famtresor-photos')
+        .upload(filePath, full, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        })
+
+      if (!uploadError) {
+        const { data } = supabase.storage
+          .from('famtresor-photos')
+          .getPublicUrl(filePath)
+
+        const supabaseUrl = data.publicUrl
+
+        // Sauvegarde l'URL Supabase dans la table profile_photos pour sync real-time
+        await supabase
+          .from('profile_photos')
+          .upsert({
+            user_id: userId,
+            photo_url: supabaseUrl,
+            uploaded_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' })
+
+        // Stocke l'URL aussi localement pour référence
+        photo.supabaseUrl = supabaseUrl
+        await photosDb.setItem(photoId, photo)
+      }
+    } catch (e) {
+      console.warn('Supabase upload failed, using local only:', e)
+    }
+  }
+
+  return photoId
 }
 
 export async function getPhoto(id: string): Promise<StoredPhoto | null> {
