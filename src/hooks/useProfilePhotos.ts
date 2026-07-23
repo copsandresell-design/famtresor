@@ -31,9 +31,11 @@ export const useProfilePhotos = () => {
 
     fetchPhotos()
 
-    // Subscribe to real-time updates
-    const channel = supabase
-      .channel('profile_photos-changes')
+    // Subscribe to real-time updates - avec ID unique pour éviter les doublons
+    const channelName = `profile-photos-${Math.random()}`
+    const channel = supabase.channel(channelName)
+
+    channel
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'profile_photos' },
