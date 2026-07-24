@@ -2,7 +2,7 @@ import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { AVATAR_EMOJIS } from '../../lib/categories'
 import { cn } from '../../lib/cn'
-import { addPhoto, deletePhoto } from '../../lib/photos'
+import { addPhoto, deletePhoto, removeRemoteProfilePhoto } from '../../lib/photos'
 import { useStore } from '../../store/useStore'
 import type { User } from '../../types'
 import { Button } from './Button'
@@ -47,12 +47,14 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
 
   function removePhoto() {
     if (user.photoId) void deletePhoto(user.photoId)
+    void removeRemoteProfilePhoto(user.id)
     updateAvatar(user.id, { photoId: null }, actorId)
     toast('Photo supprimée, retour à l’emoji.')
     onClose()
   }
 
   function pickEmoji(emoji: string) {
+    void removeRemoteProfilePhoto(user.id)
     updateAvatar(user.id, { avatar: emoji, photoId: null }, actorId)
     onClose()
   }

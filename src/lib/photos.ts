@@ -46,6 +46,8 @@ export async function addPhoto(file: File, userId?: string): Promise<string> {
       const filename = `${userId}-${timestamp}.jpeg`
       const filePath = `profile-photos/${filename}`
 
+      console.log('📸 Photo sync : démarrage', { userId, fileSize: full.size, filePath })
+
       // Upload la version full à Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('famtresor-photos')
@@ -54,36 +56,67 @@ export async function addPhoto(file: File, userId?: string): Promise<string> {
           upsert: true,
         })
 
-      if (uploadError === null) {
-        const { data } = supabase.storage
-          .from('famtresor-photos')
-          .getPublicUrl(filePath)
+      if (uploadError) {
+        console.error('❌ Photo sync : upload Storage échoué', {
+          userId,
+          filePath,
+          error: uploadError.message,
+        })
+        throw uploadError
+      }
 
-        const photoUrl = data.publicUrl
+      const { data } = supabase.storage.from('famtresor-photos').getPublicUrl(filePath)
+      const photoUrl = data.publicUrl
+      console.log('✅ Photo sync : Storage OK', { photoUrl })
 
-        // Sauvegarde dans profile_photos table pour Supabase real-time sync
-        const { error: dbError } = await supabase
-          .from('profile_photos')
-          .upsert({
+      // Sauvegarde dans profile_photos table pour Supabase real-time sync
+      const { error: dbError } = await supabase
+        .from('profile_photos')
+        .upsert(
+          {
             user_id: userId,
             photo_url: photoUrl,
             uploaded_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' })
+          },
+          { onConflict: 'user_id' },
+        )
 
-        if (dbError) {
-          console.error('Profile photo DB error:', dbError)
-          throw dbError
-        }
-
-        photo.supabaseUrl = photoUrl
-        await photosDb.setItem(photoId, photo)
+      if (dbError) {
+        console.error('❌ Photo sync : upsert profile_photos échoué', {
+          userId,
+          photoUrl,
+          error: dbError.message,
+          details: dbError.details,
+          hint: dbError.hint,
+        })
+        throw dbError
       }
+
+      console.log('✅ Photo sync : upsert profile_photos OK', { userId })
+      photo.supabaseUrl = photoUrl
+      await photosDb.setItem(photoId, photo)
     } catch (e) {
-      console.warn('Supabase sync failed, using local only:', e)
+      console.error('❌ Photo sync : échec, la photo reste locale uniquement', {
+        userId,
+        error: e instanceof Error ? e.message : e,
+      })
     }
   }
 
   return photoId
+}
+
+/** Supprime la photo de profil distante (table profile_photos) pour ce user. */
+export async function removeRemoteProfilePhoto(userId: string): Promise<void> {
+  const { error } = await supabase.from('profile_photos').delete().eq('user_id', userId)
+  if (error) {
+    console.error('❌ Photo sync : suppression profile_photos échouée', {
+      userId,
+      error: error.message,
+    })
+  } else {
+    console.log('✅ Photo sync : photo distante supprimée', { userId })
+  }
 }
 
 export async function getPhoto(id: string): Promise<StoredPhoto | null> {

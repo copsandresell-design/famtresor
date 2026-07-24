@@ -46,6 +46,16 @@ export const useProfilePhotos = () => {
               ...prev,
               [user_id]: photo_url
             }))
+          } else if (payload.eventType === 'DELETE') {
+            // Nécessite REPLICA IDENTITY FULL sur la table pour recevoir user_id
+            const userId = (payload.old as { user_id?: string } | undefined)?.user_id
+            if (userId) {
+              setPhotos(prev => {
+                const next = { ...prev }
+                delete next[userId]
+                return next
+              })
+            }
           }
         }
       )
