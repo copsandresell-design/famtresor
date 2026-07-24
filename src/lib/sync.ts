@@ -1,16 +1,22 @@
 import { supabase } from './supabase'
 
-// Sync gÃ©nÃ©rique : chaque entitÃ© partagÃ©e (users, tasks, submissions, transactions)
-// est stockÃ©e dans une table Supabase dÃ©diÃ©e sous forme d'un blob JSON (colonne `data`),
-// avec l'id mÃ©tier comme clÃ© primaire. Ãa Ã©vite de dupliquer/maintenir un schÃ©ma SQL
-// qui doit rester en phase avec les types TypeScript de l'app Ã  chaque Ã©volution.
+// Sync générique : chaque entité partagée (users, tasks, submissions, transactions)
+// est stockée dans une table Supabase dédiée sous forme d'un blob JSON (colonne `data`),
+// avec l'id métier comme clé primaire. Ça évite de dupliquer/maintenir un schéma SQL
+// qui doit rester en phase avec les types TypeScript de l'app à chaque évolution.
 
-export type SyncTable = 'sync_users' | 'sync_tasks' | 'sync_submissions' | 'sync_transactions'
+export type SyncTable =
+  | 'sync_users'
+  | 'sync_tasks'
+  | 'sync_submissions'
+  | 'sync_transactions'
+  | 'sync_savings_goals'
+  | 'sync_settings'
 
 export async function fetchAll<T>(table: SyncTable): Promise<T[]> {
   const { data, error } = await supabase.from(table).select('id, data')
   if (error) {
-    console.error(`â Sync : lecture ${table} Ã©chouÃ©e`, error.message)
+    console.error(`❌ Sync : lecture ${table} échouée`, error.message)
     return []
   }
   return (data ?? []).map((row) => (row as { data: T }).data)
@@ -21,7 +27,7 @@ export function pushRecord(table: SyncTable, id: string, record: unknown): void 
     .from(table)
     .upsert({ id, data: record, updated_at: new Date().toISOString() })
     .then(({ error }) => {
-      if (error) console.error(`â Sync : Ã©criture ${table}/${id} Ã©chouÃ©e`, error.message)
+      if (error) console.error(`❌ Sync : écriture ${table}/${id} échouée`, error.message)
     })
 }
 
@@ -31,7 +37,7 @@ export function deleteRecord(table: SyncTable, id: string): void {
     .delete()
     .eq('id', id)
     .then(({ error }) => {
-      if (error) console.error(`â Sync : suppression ${table}/${id} Ã©chouÃ©e`, error.message)
+      if (error) console.error(`❌ Sync : suppression ${table}/${id} échouée`, error.message)
     })
 }
 
