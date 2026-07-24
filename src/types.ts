@@ -119,6 +119,8 @@ export interface AppNotification {
   id: string
   /** Destinataire */
   userId: string
+  /** Nom du destinataire — les ids diffèrent entre appareils, le nom est stable */
+  userName?: string
   type: NotificationType
   title: string
   message: string
