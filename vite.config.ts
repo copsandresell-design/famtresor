@@ -9,21 +9,25 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Enregistrement pilotÃ© manuellement dans main.tsx : on veut forcer la vÃ©rification
-      // de mise Ã  jour au retour au premier plan et recharger automatiquement quand un
-      // nouveau service worker prend la main (sinon la PWA installÃ©e reste bloquÃ©e sur
-      // l'ancienne version tant qu'on ne la dÃ©sinstalle pas).
+      // Enregistrement piloté manuellement dans main.tsx : on veut forcer la vérification
+      // de mise à jour au retour au premier plan et recharger automatiquement quand un
+      // nouveau service worker prend la main (sinon la PWA installée reste bloquée sur
+      // l'ancienne version tant qu'on ne la désinstalle pas).
       injectRegister: false,
-      workbox: {
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
+      // Service worker custom (src/sw.ts) au lieu du generateSW par défaut : nécessaire
+      // pour gérer les vraies notifications push (event 'push' / 'notificationclick'),
+      // qui doivent marcher même quand l'app est complètement fermée.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
       },
       includeAssets: ['icons/icon.svg'],
       manifest: {
-        name: 'FamTrÃ©sor',
-        short_name: 'FamTrÃ©sor',
-        description: "L'app familiale oÃ¹ les tÃ¢ches mÃ©nagÃ¨res rapportent de vrais euros.",
+        name: 'FamTrésor',
+        short_name: 'FamTrésor',
+        description: "L'app familiale où les tâches ménagères rapportent de vrais euros.",
         lang: 'fr',
         theme_color: '#FBBF24',
         background_color: '#FFFFFF',
