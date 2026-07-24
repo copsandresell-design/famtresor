@@ -38,10 +38,13 @@ export function useNotificationRealtime() {
 
   useEffect(() => {
     return subscribeToNotifications((notif) => {
-      const { session, notifications } = useStore.getState()
+      const { session, notifications, users } = useStore.getState()
       if (notifications.some((n) => n.id === notif.id)) return
-      receive(notif)
-      if (session && notif.userId === session.userId) {
+      // Les ids utilisateurs diffèrent entre appareils : on résout le destinataire par son nom.
+      const local = notif.userName ? users.find((u) => u.name === notif.userName) : undefined
+      const resolved = local ? { ...notif, userId: local.id } : notif
+      receive(resolved)
+      if (session && resolved.userId === session.userId) {
         toast(`${notif.icon} ${notif.title}`)
         playNotificationSound(notif.type === 'task_rejected' || notif.type === 'penalty' ? 'error' : 'success')
       }
