@@ -72,4 +72,9 @@ export const defaultSettings: Settings = {
   initiativeBonus: 50,
   minBalance: -1000,
   theme: 'dark',
+  features: {
+    savingsGoals: true,
+    streaks: true,
+    leaderboard: true,
+  },
 }
