@@ -33,7 +33,7 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
     setBusy(true)
     try {
       // Passe l'userId pour que la photo soit uploadée vers Supabase (sync cross-device)
-      const id = await addPhoto(pending.file, user.id)
+      const id = await addPhoto(pending.file, user.name)
       if (user.photoId) void deletePhoto(user.photoId)
       updateAvatar(user.id, { photoId: id }, actorId)
       toast('Photo de profil mise à jour !')
@@ -47,14 +47,14 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
 
   function removePhoto() {
     if (user.photoId) void deletePhoto(user.photoId)
-    void removeRemoteProfilePhoto(user.id)
+    void removeRemoteProfilePhoto(user.name)
     updateAvatar(user.id, { photoId: null }, actorId)
     toast('Photo supprimée, retour à l’emoji.')
     onClose()
   }
 
   function pickEmoji(emoji: string) {
-    void removeRemoteProfilePhoto(user.id)
+    void removeRemoteProfilePhoto(user.name)
     updateAvatar(user.id, { avatar: emoji, photoId: null }, actorId)
     onClose()
   }
