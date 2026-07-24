@@ -14,6 +14,11 @@ export function AmbientBackground() {
         animate={{ x: [0, -25, 0], y: [0, -15, 0] }}
         transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
       />
+      <motion.div
+        className="absolute left-1/3 top-1/2 h-72 w-72 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 opacity-0 blur-3xl dark:opacity-10"
+        animate={{ x: [0, 20, 0], y: [0, -30, 0] }}
+        transition={{ duration: 26, repeat: Infinity, ease: 'easeInOut' }}
+      />
     </div>
   )
 }
