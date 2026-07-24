@@ -9,11 +9,21 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Enregistrement pilotÃ© manuellement dans main.tsx : on veut forcer la vÃ©rification
+      // de mise Ã  jour au retour au premier plan et recharger automatiquement quand un
+      // nouveau service worker prend la main (sinon la PWA installÃ©e reste bloquÃ©e sur
+      // l'ancienne version tant qu'on ne la dÃ©sinstalle pas).
+      injectRegister: false,
+      workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+      },
       includeAssets: ['icons/icon.svg'],
       manifest: {
-        name: 'FamTrésor',
-        short_name: 'FamTrésor',
-        description: "L'app familiale où les tâches ménagères rapportent de vrais euros.",
+        name: 'FamTrÃ©sor',
+        short_name: 'FamTrÃ©sor',
+        description: "L'app familiale oÃ¹ les tÃ¢ches mÃ©nagÃ¨res rapportent de vrais euros.",
         lang: 'fr',
         theme_color: '#FBBF24',
         background_color: '#FFFFFF',
