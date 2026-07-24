@@ -31,6 +31,14 @@ export const useProfilePhotos = () => {
 
     fetchPhotos()
 
+    // PWA/mobile : au retour au premier plan, le websocket a pu être coupé
+    // en arrière-plan → on refetch pour rattraper les changements manqués.
+    const refetch = () => {
+      if (document.visibilityState === 'visible') void fetchPhotos()
+    }
+    document.addEventListener('visibilitychange', refetch)
+    window.addEventListener('focus', refetch)
+
     // Subscribe to real-time updates - avec ID unique pour éviter les doublons
     const channelName = `profile-photos-${Math.random()}`
     const channel = supabase.channel(channelName)
@@ -62,6 +70,8 @@ export const useProfilePhotos = () => {
       .subscribe()
 
     return () => {
+      document.removeEventListener('visibilitychange', refetch)
+      window.removeEventListener('focus', refetch)
       supabase.removeChannel(channel)
     }
   }, [])
