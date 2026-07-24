@@ -128,6 +128,7 @@ export const useStore = create<Store>((set, get) => {
     const notif: AppNotification = {
       id: uid(),
       userId,
+      userName: get().users.find((u) => u.id === userId)?.name,
       type,
       title,
       message,
