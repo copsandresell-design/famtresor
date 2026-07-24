@@ -9,6 +9,7 @@ import { AvatarEditorModal } from '../../components/ui/AvatarEditorModal'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ChildAvatar } from '../../components/ui/ChildAvatar'
+import { PushNotificationsCard } from '../../components/ui/PushNotificationsCard'
 import { cn } from '../../lib/cn'
 import { computeBadges } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
@@ -204,6 +205,8 @@ export function ChildProfilePage() {
           </div>
         </section>
       )}
+
+      <PushNotificationsCard userId={user.id} />
 
       <Button variant="soft" className="w-full" onClick={logout}>
         <LogOut size={18} />
