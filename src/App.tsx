@@ -5,6 +5,7 @@ import { ChildLayout } from './components/layout/ChildLayout'
 import { ParentLayout } from './components/layout/ParentLayout'
 import { AmbientBackground } from './components/ui/AmbientBackground'
 import { Toaster } from './components/Toaster'
+import { useDataRealtime } from './hooks/useDataSync'
 import { useNotificationRealtime } from './hooks/useNotifications'
 import { LoginPage } from './pages/LoginPage'
 import { ChildHistoryPage } from './pages/child/ChildHistoryPage'
@@ -20,7 +21,7 @@ import { SettingsPage } from './pages/parent/SettingsPage'
 import { TasksPage } from './pages/parent/TasksPage'
 import { useStore } from './store/useStore'
 
-// Recharts ne sert qu'ici : chargé à la demande pour alléger le bundle initial.
+// Recharts ne sert qu'ici : chargÃ© Ã  la demande pour allÃ©ger le bundle initial.
 const StatsPage = lazy(() =>
   import('./pages/parent/StatsPage').then((m) => ({ default: m.StatsPage })),
 )
@@ -58,6 +59,7 @@ export default function App() {
   useTheme()
   useSessionExpiry()
   useNotificationRealtime()
+  useDataRealtime()
 
   useEffect(() => {
     void init()
@@ -67,7 +69,7 @@ export default function App() {
     return (
       <div className="flex min-h-dvh items-center justify-center">
         <p className="animate-pulse text-4xl" aria-label="Chargement">
-          💰
+          ð°
         </p>
       </div>
     )
@@ -89,7 +91,7 @@ export default function App() {
                 <Route
                   path="stats"
                   element={
-                    <Suspense fallback={<p className="animate-pulse text-center text-2xl">📊</p>}>
+                    <Suspense fallback={<p className="animate-pulse text-center text-2xl">ð</p>}>
                       <StatsPage />
                     </Suspense>
                   }
