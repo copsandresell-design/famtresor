@@ -106,3 +106,25 @@ export interface Session {
   role: Role
   expiresAt: number
 }
+
+export type NotificationType =
+  | 'task_assigned'
+  | 'task_submitted'
+  | 'task_approved'
+  | 'task_rejected'
+  | 'message'
+  | 'penalty'
+
+export interface AppNotification {
+  id: string
+  /** Destinataire */
+  userId: string
+  type: NotificationType
+  title: string
+  message: string
+  icon: string
+  read: boolean
+  createdAt: number
+  /** Route interne à ouvrir au clic */
+  link?: string
+}

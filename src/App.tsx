@@ -5,6 +5,7 @@ import { ChildLayout } from './components/layout/ChildLayout'
 import { ParentLayout } from './components/layout/ParentLayout'
 import { AmbientBackground } from './components/ui/AmbientBackground'
 import { Toaster } from './components/Toaster'
+import { useNotificationRealtime } from './hooks/useNotifications'
 import { LoginPage } from './pages/LoginPage'
 import { ChildHistoryPage } from './pages/child/ChildHistoryPage'
 import { ChildHomePage } from './pages/child/ChildHomePage'
@@ -56,6 +57,7 @@ export default function App() {
   const init = useStore((s) => s.init)
   useTheme()
   useSessionExpiry()
+  useNotificationRealtime()
 
   useEffect(() => {
     void init()

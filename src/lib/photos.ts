@@ -54,7 +54,7 @@ export async function addPhoto(file: File, userId?: string): Promise<string> {
           upsert: true,
         })
 
-      if (!uploadError) {
+      if (uploadError === null) {
         const { data } = supabase.storage
           .from('famtresor-photos')
           .getPublicUrl(filePath)
@@ -62,13 +62,18 @@ export async function addPhoto(file: File, userId?: string): Promise<string> {
         const photoUrl = data.publicUrl
 
         // Sauvegarde dans profile_photos table pour Supabase real-time sync
-        await supabase
+        const { error: dbError } = await supabase
           .from('profile_photos')
           .upsert({
             user_id: userId,
             photo_url: photoUrl,
             uploaded_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' })
+          })
+
+        if (dbError) {
+          console.error('Profile photo DB error:', dbError)
+          throw dbError
+        }
 
         photo.supabaseUrl = photoUrl
         await photosDb.setItem(photoId, photo)

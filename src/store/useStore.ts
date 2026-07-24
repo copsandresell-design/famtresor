@@ -3,11 +3,15 @@ import { db, load, save } from '../db/storage'
 import { defaultSettings, seedTasks, seedUsers } from '../db/seed'
 import { computeBalance } from '../lib/balance'
 import { hashSecret, makeSalt, verifySecret } from '../lib/crypto'
+import { formatEuro } from '../lib/format'
 import { uid } from '../lib/id'
+import { broadcastNotification } from '../lib/realtime'
 import { isTaskAvailable } from '../lib/recurrence'
 import type {
+  AppNotification,
   AuditLog,
   Message,
+  NotificationType,
   Session,
   Settings,
   Task,
@@ -19,6 +23,7 @@ import type {
 export const SESSION_DURATION = 30 * 60 * 1000
 export const PENALTY_CANCEL_WINDOW = 24 * 60 * 60 * 1000
 const MAX_LOGS = 2000
+const MAX_NOTIFICATIONS = 200
 
 export interface Toast {
   id: number
@@ -36,6 +41,7 @@ interface Store {
   transactions: Transaction[]
   logs: AuditLog[]
   messages: Message[]
+  notifications: AppNotification[]
   settings: Settings
   session: Session | null
   toasts: Toast[]
@@ -43,6 +49,11 @@ interface Store {
   init: () => Promise<void>
   toast: (message: string, kind?: Toast['kind']) => void
   dismissToast: (id: number) => void
+
+  receiveNotification: (notif: AppNotification) => void
+  markNotificationRead: (id: string) => void
+  markAllNotificationsRead: (userId: string) => void
+  clearNotifications: (userId: string) => void
 
   login: (userId: string, secret: string) => Promise<boolean>
   logout: () => void
@@ -87,7 +98,15 @@ let toastSeq = 0
 
 export const useStore = create<Store>((set, get) => {
   function persist(
-    key: 'users' | 'tasks' | 'submissions' | 'transactions' | 'logs' | 'messages' | 'settings',
+    key:
+      | 'users'
+      | 'tasks'
+      | 'submissions'
+      | 'transactions'
+      | 'logs'
+      | 'messages'
+      | 'notifications'
+      | 'settings',
   ) {
     save(key, get()[key])
   }
@@ -98,6 +117,36 @@ export const useStore = create<Store>((set, get) => {
     persist('logs')
   }
 
+  function notify(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    message: string,
+    icon: string,
+    link?: string,
+  ) {
+    const notif: AppNotification = {
+      id: uid(),
+      userId,
+      type,
+      title,
+      message,
+      icon,
+      read: false,
+      createdAt: Date.now(),
+      link,
+    }
+    set((s) => ({ notifications: [notif, ...s.notifications].slice(0, MAX_NOTIFICATIONS) }))
+    persist('notifications')
+    broadcastNotification(notif)
+  }
+
+  function notifyParents(type: NotificationType, title: string, message: string, icon: string, link?: string) {
+    for (const parent of get().users.filter((u) => u.role === 'parent' && u.isActive)) {
+      notify(parent.id, type, title, message, icon, link)
+    }
+  }
+
   return {
     ready: false,
     users: [],
@@ -106,6 +155,7 @@ export const useStore = create<Store>((set, get) => {
     transactions: [],
     logs: [],
     messages: [],
+    notifications: [],
     settings: defaultSettings,
     session: null,
     toasts: [],
@@ -116,6 +166,7 @@ export const useStore = create<Store>((set, get) => {
       const submissions = await load<TaskSubmission[]>('submissions', [])
       const transactions = await load<Transaction[]>('transactions', [])
       const messages = await load<Message[]>('messages', [])
+      const notifications = await load<AppNotification[]>('notifications', [])
       let logs = await load<AuditLog[]>('logs', [])
       const settings = await load<Settings>('settings', defaultSettings)
       let session = await load<Session | null>('session', null)
@@ -143,7 +194,7 @@ export const useStore = create<Store>((set, get) => {
         save('session', null)
       }
 
-      set({ ready: true, users, tasks, submissions, transactions, logs, messages, settings, session })
+      set({ ready: true, users, tasks, submissions, transactions, logs, messages, notifications, settings, session })
     },
 
     toast: (message, kind = 'success') => {
@@ -153,6 +204,31 @@ export const useStore = create<Store>((set, get) => {
     },
 
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+
+    receiveNotification: (notif) => {
+      if (get().notifications.some((n) => n.id === notif.id)) return
+      set((s) => ({ notifications: [notif, ...s.notifications].slice(0, MAX_NOTIFICATIONS) }))
+      persist('notifications')
+    },
+
+    markNotificationRead: (id) => {
+      set((s) => ({
+        notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+      }))
+      persist('notifications')
+    },
+
+    markAllNotificationsRead: (userId) => {
+      set((s) => ({
+        notifications: s.notifications.map((n) => (n.userId === userId ? { ...n, read: true } : n)),
+      }))
+      persist('notifications')
+    },
+
+    clearNotifications: (userId) => {
+      set((s) => ({ notifications: s.notifications.filter((n) => n.userId !== userId) }))
+      persist('notifications')
+    },
 
     login: async (userId, secret) => {
       const user = get().users.find((u) => u.id === userId && u.isActive)
@@ -185,15 +261,29 @@ export const useStore = create<Store>((set, get) => {
 
     saveTask: (input, actorId) => {
       const { id, ...fields } = input
+      let newlyAssigned: string[] = []
       if (id) {
+        const before = get().tasks.find((t) => t.id === id)
+        newlyAssigned = fields.assignedTo.filter((c) => !before?.assignedTo.includes(c))
         set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...fields } : t)) }))
         pushLog('task_updated', actorId, `« ${fields.title} »`, undefined, fields.amount)
       } else {
         const task: Task = { ...fields, id: uid(), createdBy: actorId, createdAt: Date.now(), isActive: true }
+        newlyAssigned = task.assignedTo
         set((s) => ({ tasks: [task, ...s.tasks] }))
         pushLog('task_created', actorId, `« ${task.title} »`, undefined, task.amount)
       }
       persist('tasks')
+      for (const childId of newlyAssigned) {
+        notify(
+          childId,
+          'task_assigned',
+          'Nouvelle tâche pour toi !',
+          `${fields.title} · +${formatEuro(fields.amount)}`,
+          fields.icon,
+          '/enfant',
+        )
+      }
     },
 
     deleteTask: (taskId, actorId) => {
@@ -228,6 +318,14 @@ export const useStore = create<Store>((set, get) => {
         task.amount,
       )
       persist('submissions')
+      const child = get().users.find((u) => u.id === childId)
+      notifyParents(
+        'task_submitted',
+        `${child?.name ?? 'Un enfant'} a terminé une tâche`,
+        `${task.title}${isInitiative ? ' ⭐ initiative' : ''} · à valider`,
+        task.icon,
+        '/parent/validations',
+      )
       return true
     },
 
@@ -238,6 +336,8 @@ export const useStore = create<Store>((set, get) => {
       set((s) => ({ messages: [message, ...s.messages] }))
       pushLog('message_sent', fromId, `« ${trimmed} »`, toChildId)
       persist('messages')
+      const from = get().users.find((u) => u.id === fromId)
+      notify(toChildId, 'message', `Message de ${from?.name ?? 'tes parents'}`, trimmed, '💌', '/enfant/profil')
     },
 
     approveSubmission: (submissionId, parentId) => {
@@ -268,6 +368,14 @@ export const useStore = create<Store>((set, get) => {
       pushLog('submission_approved', parentId, `« ${task.title} »`, sub.childId, amount)
       persist('submissions')
       persist('transactions')
+      notify(
+        sub.childId,
+        'task_approved',
+        'Tâche validée ! 🎉',
+        `${task.title} · +${formatEuro(amount)}${bonus > 0 ? ' (bonus initiative inclus)' : ''}`,
+        task.icon,
+        '/enfant',
+      )
     },
 
     rejectSubmission: (submissionId, parentId, reason) => {
@@ -284,6 +392,14 @@ export const useStore = create<Store>((set, get) => {
       }))
       pushLog('submission_rejected', parentId, `« ${task?.title ?? '?'} » — ${reason || 'sans motif'}`, sub.childId)
       persist('submissions')
+      notify(
+        sub.childId,
+        'task_rejected',
+        'Tâche refusée',
+        `${task?.title ?? 'Tâche'}${reason ? ` — ${reason}` : ''}`,
+        '😕',
+        '/enfant',
+      )
     },
 
     applyPenalty: ({ childId, title, motif, amount }, parentId) => {
@@ -308,6 +424,14 @@ export const useStore = create<Store>((set, get) => {
       set((s) => ({ transactions: [transaction, ...s.transactions] }))
       pushLog('penalty_applied', parentId, `« ${title} »${motif ? ` — ${motif}` : ''}`, childId, debit)
       persist('transactions')
+      notify(
+        childId,
+        'penalty',
+        'Pénalité appliquée',
+        `${title} · ${formatEuro(debit)}`,
+        '⚠️',
+        '/enfant/historique',
+      )
       return true
     },
 

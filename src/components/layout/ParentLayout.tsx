@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { useCurrentUser, useStore } from '../../store/useStore'
+import { NotificationCenter } from '../NotificationCenter'
 import { AvatarEditorModal } from '../ui/AvatarEditorModal'
 import { ChildAvatar } from '../ui/ChildAvatar'
 
@@ -84,9 +85,10 @@ export function ParentLayout() {
   return (
     <div className="min-h-dvh lg:flex">
       <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:gap-1 lg:border-r lg:border-slate-200 lg:bg-white lg:p-4 dark:lg:border-slate-800 dark:lg:bg-slate-900">
-        <p className="mb-2 px-3 text-lg font-black">
-          💰 {settings.familyName}
-        </p>
+        <div className="mb-2 flex items-center justify-between px-3">
+          <p className="text-lg font-black">💰 {settings.familyName}</p>
+          <NotificationCenter align="left" />
+        </div>
         {user && (
           <button
             onClick={() => setEditingAvatar(true)}
@@ -111,13 +113,16 @@ export function ParentLayout() {
       <div className="flex min-h-dvh flex-1 flex-col">
         <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
           <p className="text-base font-black">💰 {settings.familyName}</p>
-          <button
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Ouvrir le menu"
-            className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-          >
-            <Menu size={22} />
-          </button>
+          <div className="flex items-center gap-1">
+            <NotificationCenter />
+            <button
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Ouvrir le menu"
+              className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+            >
+              <Menu size={22} />
+            </button>
+          </div>
         </header>
 
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-24 lg:pb-8">

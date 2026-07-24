@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { useCurrentUser, useStore } from '../../store/useStore'
+import { NotificationCenter } from '../NotificationCenter'
 import { ChildAvatar } from '../ui/ChildAvatar'
 
 const links = [
@@ -29,7 +30,8 @@ export function ChildLayout() {
         style={{ borderTopColor: user.color, borderTopWidth: 4 }}
       >
         <ChildAvatar user={user} size="sm" />
-        <p className="text-base font-black">{user.name}</p>
+        <p className="min-w-0 flex-1 truncate text-base font-black">{user.name}</p>
+        <NotificationCenter />
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 pb-24">
