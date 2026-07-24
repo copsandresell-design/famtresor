@@ -68,7 +68,7 @@ export async function addPhoto(file: File, userId?: string): Promise<string> {
             user_id: userId,
             photo_url: photoUrl,
             uploaded_at: new Date().toISOString(),
-          })
+          }, { onConflict: 'user_id' })
 
         if (dbError) {
           console.error('Profile photo DB error:', dbError)

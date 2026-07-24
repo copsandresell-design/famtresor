@@ -29,3 +29,15 @@ body {
 :focus-visible {
   @apply outline-2 outline-offset-2 outline-amber-500;
 }
+
+/* Scrollbars discrètes pour les listes internes (notifications, badges…) */
+.overflow-y-auto,
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225 / 0.6) transparent;
+}
+
+.dark .overflow-y-auto,
+.dark .overflow-x-auto {
+  scrollbar-color: rgb(51 65 85 / 0.8) transparent;
+}

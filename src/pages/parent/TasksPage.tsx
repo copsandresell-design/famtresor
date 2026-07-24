@@ -1,6 +1,7 @@
-import { Pencil, Plus, Search } from 'lucide-react'
+import { ArrowUpDown, Pencil, Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -12,6 +13,15 @@ import { useStore } from '../../store/useStore'
 import type { Category, Task } from '../../types'
 import { TaskFormModal } from './TaskFormModal'
 
+type Sort = 'recent' | 'amount-desc' | 'amount-asc' | 'title'
+
+const SORTS: Record<Sort, { label: string; compare: (a: Task, b: Task) => number }> = {
+  recent: { label: 'Plus récentes', compare: (a, b) => b.createdAt - a.createdAt },
+  'amount-desc': { label: 'Montant ↓', compare: (a, b) => b.amount - a.amount },
+  'amount-asc': { label: 'Montant ↑', compare: (a, b) => a.amount - b.amount },
+  title: { label: 'Titre A→Z', compare: (a, b) => a.title.localeCompare(b.title, 'fr') },
+}
+
 export function TasksPage() {
   const tasks = useStore((s) => s.tasks)
   const children = useStore((s) => s.users).filter((u) => u.role === 'child')
@@ -21,6 +31,7 @@ export function TasksPage() {
   const [childFilter, setChildFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState<'all' | Category>('all')
   const [typeFilter, setTypeFilter] = useState<'all' | Task['type']>('all')
+  const [sort, setSort] = useState<Sort>('recent')
   const [editing, setEditing] = useState<Task | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -33,27 +44,34 @@ export function TasksPage() {
 
   const filtered = useMemo(
     () =>
-      tasks.filter((task) => {
-        if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false
-        if (childFilter !== 'all' && !task.assignedTo.includes(childFilter)) return false
-        if (categoryFilter !== 'all' && task.category !== categoryFilter) return false
-        if (typeFilter !== 'all' && task.type !== typeFilter) return false
-        return true
-      }),
-    [tasks, search, childFilter, categoryFilter, typeFilter],
+      tasks
+        .filter((task) => {
+          if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false
+          if (childFilter !== 'all' && !task.assignedTo.includes(childFilter)) return false
+          if (categoryFilter !== 'all' && task.category !== categoryFilter) return false
+          if (typeFilter !== 'all' && task.type !== typeFilter) return false
+          return true
+        })
+        .sort(SORTS[sort].compare),
+    [tasks, search, childFilter, categoryFilter, typeFilter, sort],
   )
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-black">Tâches</h1>
+        <div>
+          <h1 className="text-2xl font-black">Tâches</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {filtered.length} sur {tasks.length}
+          </p>
+        </div>
         <Button onClick={() => setCreating(true)}>
           <Plus size={18} />
           Nouvelle tâche
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <label className="relative col-span-2 sm:col-span-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -95,6 +113,21 @@ export function TasksPage() {
           <option value="recurrente">Récurrentes</option>
           <option value="ponctuelle">Ponctuelles</option>
         </select>
+        <label className="relative col-span-2 sm:col-span-1">
+          <ArrowUpDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <select
+            className={`${inputCls} pl-8`}
+            value={sort}
+            onChange={(e) => setSort(e.target.value as Sort)}
+            aria-label="Trier les tâches"
+          >
+            {Object.entries(SORTS).map(([key, { label }]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <Card className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -104,12 +137,21 @@ export function TasksPage() {
             onClick={() => setEditing(task)}
             className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer"
           >
-            <span className="text-2xl" aria-hidden>
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-2xl"
+              style={{ backgroundColor: `${CATEGORIES[task.category].color}18` }}
+              aria-hidden
+            >
               {task.icon}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{task.title}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2">
+                <p className="truncate font-semibold">{task.title}</p>
+                <Badge className="hidden shrink-0 sm:inline-flex">
+                  {CATEGORIES[task.category].emoji} {CATEGORIES[task.category].label}
+                </Badge>
+              </div>
+              <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                 {describeRecurrence(task)} ·{' '}
                 {task.assignedTo
                   .map((id) => children.find((c) => c.id === id)?.name)

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Flame, Hourglass } from 'lucide-react'
+import { Flame, Hourglass, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { PhotoPicker, type PickedPhoto } from '../../components/photos/PhotoPicker'
 import { Amount } from '../../components/ui/Amount'
 import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
@@ -14,6 +15,7 @@ import { Modal } from '../../components/ui/Modal'
 import { db } from '../../db/storage'
 import { computeBadges, type BadgeState } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
+import { computeLevel } from '../../lib/levels'
 import { DIFFICULTIES } from '../../lib/categories'
 import { celebrate } from '../../lib/confetti'
 import { childGradient, gradientEnd } from '../../lib/colors'
@@ -142,7 +144,18 @@ export function ChildHomePage() {
     [childId, submissions],
   )
 
-  if (!user || !childId || !streak) return null
+  const level = useMemo(
+    () => (childId ? computeLevel(childId, submissions) : null),
+    [childId, submissions],
+  )
+
+  const badges = useMemo(() => {
+    if (!childId) return []
+    const children = users.filter((u) => u.role === 'child' && u.isActive)
+    return computeBadges({ childId, submissions, transactions, children })
+  }, [childId, submissions, transactions, users])
+
+  if (!user || !childId || !streak || !level) return null
 
   const balance = computeBalance(transactions, childId)
   const pending = submissions.filter((s) => s.childId === childId && s.status === 'pending')
@@ -177,13 +190,70 @@ export function ChildHomePage() {
         <ChildAvatar user={user} size="lg" onClick={() => setEditingAvatar(true)} />
         <p className="font-display text-lg font-bold">{user.name}</p>
         <AnimatedBalance cents={balance} className="font-display text-6xl font-bold drop-shadow-sm" />
-        {streak.count > 0 && (
+
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
           <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
-            <Flame size={16} aria-hidden />
-            Série : {streak.count} jour{streak.count > 1 ? 's' : ''}
+            <Sparkles size={15} aria-hidden />
+            Niveau {level.level} · {level.title}
           </p>
-        )}
+          {streak.count > 0 && (
+            <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
+              <Flame size={16} aria-hidden />
+              {streak.count} jour{streak.count > 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-2 w-full max-w-60">
+          <div className="h-2.5 overflow-hidden rounded-full bg-white/25">
+            <motion.div
+              className="h-full rounded-full bg-white"
+              initial={{ width: 0 }}
+              animate={{ width: `${(level.progress / level.target) * 100}%` }}
+              transition={{ type: 'spring', damping: 20, delay: 0.3 }}
+            />
+          </div>
+          <p className="mt-1 text-xs font-semibold text-white/85">
+            {level.target - level.progress} tâche{level.target - level.progress > 1 ? 's' : ''} avant
+            le niveau {level.level + 1} !
+          </p>
+        </div>
       </motion.section>
+
+      {badges.some((b) => b.unlocked) && (
+        <Link to="/enfant/profil" className="block">
+          <Card className="flex items-center gap-2 overflow-x-auto p-3">
+            <span className="shrink-0 text-xs font-bold text-slate-500 dark:text-slate-400">
+              Mes badges
+            </span>
+            <span className="flex items-center gap-1.5">
+              {badges
+                .filter((b) => b.unlocked)
+                .map((b) => (
+                  <span
+                    key={b.id}
+                    title={b.label}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-xl dark:bg-amber-950/40"
+                  >
+                    {b.emoji}
+                  </span>
+                ))}
+              {badges
+                .filter((b) => !b.unlocked)
+                .slice(0, 3)
+                .map((b) => (
+                  <span
+                    key={b.id}
+                    title={`À débloquer : ${b.label}`}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xl opacity-40 grayscale dark:bg-slate-800"
+                  >
+                    {b.emoji}
+                  </span>
+                ))}
+            </span>
+          </Card>
+        </Link>
+      )}
 
       {streak.count > 0 && !streak.doneToday && (
         <Card className="flex items-center gap-3 border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/40">
