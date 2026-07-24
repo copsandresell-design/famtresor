@@ -94,11 +94,31 @@ export interface AuditLog {
   timestamp: number
 }
 
+/** Fonctionnalités optionnelles activables/désactivables par les parents (Réglages). */
+export interface FeatureFlags {
+  savingsGoals: boolean
+  streaks: boolean
+  leaderboard: boolean
+}
+
 export interface Settings {
   familyName: string
   initiativeBonus: number
   minBalance: number
   theme: Theme
+  features: FeatureFlags
+}
+
+/** Objectif d'épargne fixé par un enfant (ex: un jeu vidéo à 30€). */
+export interface SavingsGoal {
+  id: string
+  childId: string
+  title: string
+  icon: string
+  targetAmount: number
+  createdBy: string
+  createdAt: number
+  achievedAt?: number
 }
 
 export interface Session {
@@ -119,8 +139,6 @@ export interface AppNotification {
   id: string
   /** Destinataire */
   userId: string
-  /** Nom du destinataire — les ids diffèrent entre appareils, le nom est stable */
-  userName?: string
   type: NotificationType
   title: string
   message: string
