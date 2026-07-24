@@ -4,9 +4,31 @@ import { Card } from '../../components/ui/Card'
 import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { Field, inputCls } from '../../components/ui/Field'
 import { PushNotificationsCard } from '../../components/ui/PushNotificationsCard'
+import { Switch } from '../../components/ui/Switch'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
 import { useCurrentUser, useStore } from '../../store/useStore'
-import type { Theme } from '../../types'
+import type { FeatureFlags, Theme } from '../../types'
+
+const FEATURE_LABELS: { key: keyof FeatureFlags; emoji: string; label: string; description: string }[] = [
+  {
+    key: 'savingsGoals',
+    emoji: '🎯',
+    label: "Objectifs d'épargne",
+    description: 'Chaque enfant peut se fixer un objectif (ex: un jeu) avec une barre de progression.',
+  },
+  {
+    key: 'streaks',
+    emoji: '🔥',
+    label: 'Séries (streaks)',
+    description: 'Suivi des jours consécutifs avec au moins une tâche faite, affiché sur leur accueil.',
+  },
+  {
+    key: 'leaderboard',
+    emoji: '🏆',
+    label: 'Classement',
+    description: "Classement des enfants par gains du mois, visible sur ta vue d'ensemble.",
+  },
+]
 
 export function SettingsPage() {
   const user = useCurrentUser()
@@ -97,6 +119,35 @@ export function SettingsPage() {
             <option value="dark">Sombre</option>
           </select>
         </Field>
+      </Card>
+
+      <Card className="space-y-4 p-5">
+        <div>
+          <h2 className="font-bold">Fonctionnalités</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Active ou désactive des fonctionnalités pour toute la famille.
+          </p>
+        </div>
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          {FEATURE_LABELS.map(({ key, emoji, label, description }) => (
+            <div key={key} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+              <span className="text-xl" aria-hidden>
+                {emoji}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">{label}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
+              </div>
+              <Switch
+                checked={settings.features[key]}
+                onChange={(checked) =>
+                  updateSettings({ features: { ...settings.features, [key]: checked } }, user.id)
+                }
+                label={label}
+              />
+            </div>
+          ))}
+        </div>
       </Card>
 
       <PushNotificationsCard userId={user.id} />

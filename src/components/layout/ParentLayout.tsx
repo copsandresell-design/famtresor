@@ -66,10 +66,12 @@ export function ParentLayout() {
       end={link.end}
       className={({ isActive }) =>
         cn(
-          'relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors',
+          'relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-all',
           mobile && 'flex-col gap-0.5 px-2 py-1.5 text-[11px]',
           isActive
-            ? 'bg-amber-100 text-amber-900 dark:bg-amber-400/15 dark:text-amber-300'
+            ? mobile
+              ? 'text-amber-600 dark:text-amber-400'
+              : 'bg-gradient-to-r from-amber-400/15 to-orange-500/10 text-amber-900 shadow-[inset_0_0_0_1px] shadow-amber-500/20 dark:text-amber-300'
             : 'text-slate-600 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-800',
         )
       }

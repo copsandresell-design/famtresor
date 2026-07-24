@@ -68,6 +68,7 @@ export function ChildHomePage() {
   const tasks = useStore((s) => s.tasks)
   const submissions = useStore((s) => s.submissions)
   const transactions = useStore((s) => s.transactions)
+  const savingsGoals = useStore((s) => s.savingsGoals)
   const messages = useStore((s) => s.messages)
   const settings = useStore((s) => s.settings)
   const submitTask = useStore((s) => s.submitTask)
@@ -160,6 +161,10 @@ export function ChildHomePage() {
   const balance = computeBalance(transactions, childId)
   const pending = submissions.filter((s) => s.childId === childId && s.status === 'pending')
   const recent = transactions.filter((t) => t.childId === childId).slice(0, 5)
+  const myGoals = savingsGoals.filter((g) => g.childId === childId)
+  const topGoal = myGoals.length
+    ? [...myGoals].sort((a, b) => a.targetAmount - balance - (b.targetAmount - balance))[0]
+    : null
 
   function closeSubmitModal() {
     setConfirming(null)
@@ -196,7 +201,7 @@ export function ChildHomePage() {
             <Sparkles size={15} aria-hidden />
             Niveau {level.level} · {level.title}
           </p>
-          {streak.count > 0 && (
+          {settings.features.streaks && streak.count > 0 && (
             <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
               <Flame size={16} aria-hidden />
               {streak.count} jour{streak.count > 1 ? 's' : ''}
@@ -255,7 +260,35 @@ export function ChildHomePage() {
         </Link>
       )}
 
-      {streak.count > 0 && !streak.doneToday && (
+      {settings.features.savingsGoals && topGoal && (
+        <Link to="/enfant/profil" className="block">
+          <Card className="space-y-2 p-4 transition-shadow hover:shadow-md">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl" aria-hidden>
+                {topGoal.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold">{topGoal.title}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {balance >= topGoal.targetAmount
+                    ? 'Objectif atteint ! 🎉'
+                    : `${formatEuro(Math.max(0, topGoal.targetAmount - balance))} restants`}
+                </p>
+              </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(100, (balance / topGoal.targetAmount) * 100)}%` }}
+                transition={{ type: 'spring', damping: 20, delay: 0.2 }}
+              />
+            </div>
+          </Card>
+        </Link>
+      )}
+
+      {settings.features.streaks && streak.count > 0 && !streak.doneToday && (
         <Card className="flex items-center gap-3 border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/40">
           <Flame className="shrink-0 text-amber-500" size={20} aria-hidden />
           <p className="text-sm font-semibold">

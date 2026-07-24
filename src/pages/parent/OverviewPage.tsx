@@ -1,7 +1,7 @@
-import { format, isSameDay, isSameWeek, isToday, subDays } from 'date-fns'
+import { format, isSameDay, isSameMonth, isSameWeek, isToday, subDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { motion } from 'framer-motion'
-import { BellRing, CheckCircle2, Plus, ShieldAlert, TrendingUp } from 'lucide-react'
+import { BellRing, CheckCircle2, Plus, ShieldAlert, TrendingUp, Trophy } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Amount } from '../../components/ui/Amount'
@@ -15,6 +15,49 @@ import { useStore } from '../../store/useStore'
 import type { Transaction, User } from '../../types'
 
 const WEEK = { weekStartsOn: 1 as const }
+const MEDALS = ['🥇', '🥈', '🥉']
+
+/** Classement des enfants par gains du mois — visible seulement si activé dans Réglages. */
+function LeaderboardCard({ children: kids, transactions }: { children: User[]; transactions: Transaction[] }) {
+  const ranked = useMemo(() => {
+    return kids
+      .map((child) => {
+        const monthGains = transactions
+          .filter((t) => t.childId === child.id && t.type === 'task_approval' && isSameMonth(t.createdAt, Date.now()))
+          .reduce((sum, t) => sum + t.amount, 0)
+        return { child, monthGains }
+      })
+      .sort((a, b) => b.monthGains - a.monthGains)
+  }, [kids, transactions])
+
+  if (ranked.length === 0) return null
+
+  return (
+    <Card className="p-5">
+      <h2 className="mb-4 flex items-center gap-2 text-lg font-bold">
+        <Trophy size={18} className="text-amber-500" />
+        Classement du mois
+      </h2>
+      <div className="space-y-2">
+        {ranked.map(({ child, monthGains }, i) => (
+          <div
+            key={child.id}
+            className="flex items-center gap-3 rounded-xl px-2 py-2 first:bg-amber-50 first:dark:bg-amber-950/30"
+          >
+            <span className="w-6 shrink-0 text-center text-lg" aria-hidden>
+              {MEDALS[i] ?? `${i + 1}.`}
+            </span>
+            <ChildAvatar user={child} size="sm" />
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold">{child.name}</p>
+            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+              {monthGains > 0 ? formatEuro(monthGains) : '—'}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
 
 function Sparkline({ childId, color }: { childId: string; color: string }) {
   const transactions = useStore((s) => s.transactions)
@@ -154,6 +197,7 @@ export function OverviewPage() {
   const users = useStore((s) => s.users)
   const transactions = useStore((s) => s.transactions)
   const submissions = useStore((s) => s.submissions)
+  const settings = useStore((s) => s.settings)
   const navigate = useNavigate()
 
   const children = users.filter((u) => u.role === 'child' && u.isActive)
@@ -220,6 +264,10 @@ export function OverviewPage() {
 
       {children.length > 0 && (
         <WeeklyActivityChart children={children} transactions={transactions} />
+      )}
+
+      {settings.features.leaderboard && children.length > 0 && (
+        <LeaderboardCard children={children} transactions={transactions} />
       )}
 
       <div>

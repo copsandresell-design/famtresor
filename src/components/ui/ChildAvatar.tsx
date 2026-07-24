@@ -22,7 +22,7 @@ export function ChildAvatar({ user, size = 'md', onClick }: Props) {
   const localPhotoUrl = usePhotoUrl(user.photoId, 'thumb')
   const { photos: supabasePhotos } = useProfilePhotos()
 
-  // Priorité: Supabase real-time sync > Local IndexedDB
+  // Priorité: Supabase real-time sync (clé = nom, stable cross-device) > Local IndexedDB
   const photoUrl = supabasePhotos[user.name] || localPhotoUrl
 
   const visual = (

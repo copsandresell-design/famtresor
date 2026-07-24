@@ -14,6 +14,7 @@ import type {
   AuditLog,
   Message,
   NotificationType,
+  SavingsGoal,
   Session,
   Settings,
   Task,
@@ -41,6 +42,7 @@ interface Store {
   tasks: Task[]
   submissions: TaskSubmission[]
   transactions: Transaction[]
+  savingsGoals: SavingsGoal[]
   logs: AuditLog[]
   messages: Message[]
   notifications: AppNotification[]
@@ -52,10 +54,15 @@ interface Store {
   /** Réconcilie l'état local avec Supabase (familles, tâches, soumissions, transactions partagées). */
   syncFromRemote: () => Promise<void>
   receiveRemoteUpsert: (
-    key: 'users' | 'tasks' | 'submissions' | 'transactions',
-    record: User | Task | TaskSubmission | Transaction,
+    key: 'users' | 'tasks' | 'submissions' | 'transactions' | 'savingsGoals',
+    record: User | Task | TaskSubmission | Transaction | SavingsGoal,
   ) => void
-  receiveRemoteDelete: (key: 'users' | 'tasks' | 'submissions' | 'transactions', id: string) => void
+  receiveRemoteDelete: (
+    key: 'users' | 'tasks' | 'submissions' | 'transactions' | 'savingsGoals',
+    id: string,
+  ) => void
+  /** Reçoit les réglages (dont les fonctionnalités activées) mis à jour depuis un autre appareil. */
+  receiveRemoteSettings: (settings: Settings) => void
   toast: (message: string, kind?: Toast['kind']) => void
   dismissToast: (id: number) => void
 
@@ -101,15 +108,31 @@ interface Store {
   ) => void
   changeSecret: (userId: string, newSecret: string, actorId: string) => Promise<void>
   updateSettings: (patch: Partial<Settings>, actorId: string) => void
+
+  addSavingsGoal: (childId: string, title: string, icon: string, targetAmount: number, actorId: string) => void
+  deleteSavingsGoal: (goalId: string, actorId: string) => void
 }
 
 let toastSeq = 0
 
-const SYNCED_KEYS = ['users', 'tasks', 'submissions', 'transactions'] as const
+const SYNCED_KEYS = ['users', 'tasks', 'submissions', 'transactions', 'savingsGoals'] as const
 type SyncedKey = (typeof SYNCED_KEYS)[number]
 
+const SYNC_TABLE_FOR: Record<SyncedKey, SyncTable> = {
+  users: 'sync_users',
+  tasks: 'sync_tasks',
+  submissions: 'sync_submissions',
+  transactions: 'sync_transactions',
+  savingsGoals: 'sync_savings_goals',
+}
+
 function syncTableFor(key: SyncedKey): SyncTable {
-  return `sync_${key}` as SyncTable
+  return SYNC_TABLE_FOR[key]
+}
+
+/** Fusionne les réglages chargés (potentiellement anciens, sans le champ `features`) avec les valeurs par défaut. */
+function normalizeSettings(raw: Settings): Settings {
+  return { ...defaultSettings, ...raw, features: { ...defaultSettings.features, ...raw.features } }
 }
 
 export const useStore = create<Store>((set, get) => {
@@ -119,10 +142,10 @@ export const useStore = create<Store>((set, get) => {
       | 'tasks'
       | 'submissions'
       | 'transactions'
+      | 'savingsGoals'
       | 'logs'
       | 'messages'
-      | 'notifications'
-      | 'settings',
+      | 'notifications',
   ) {
     const value = get()[key]
     save(key, value)
@@ -154,6 +177,7 @@ export const useStore = create<Store>((set, get) => {
     const notif: AppNotification = {
       id: uid(),
       userId,
+      userName: get().users.find((u) => u.id === userId)?.name,
       type,
       title,
       message,
@@ -181,6 +205,7 @@ export const useStore = create<Store>((set, get) => {
     tasks: [],
     submissions: [],
     transactions: [],
+    savingsGoals: [],
     logs: [],
     messages: [],
     notifications: [],
@@ -194,10 +219,11 @@ export const useStore = create<Store>((set, get) => {
       let tasks = await load<Task[]>('tasks', [])
       let submissions = await load<TaskSubmission[]>('submissions', [])
       let transactions = await load<Transaction[]>('transactions', [])
+      let savingsGoals = await load<SavingsGoal[]>('savingsGoals', [])
       const messages = await load<Message[]>('messages', [])
       const notifications = await load<AppNotification[]>('notifications', [])
       let logs = await load<AuditLog[]>('logs', [])
-      const settings = await load<Settings>('settings', defaultSettings)
+      let settings = normalizeSettings(await load<Settings>('settings', defaultSettings))
       let session = await load<Session | null>('session', null)
 
       // Les identifiants d'utilisateur/tâche sont générés localement à chaque appareil :
@@ -208,18 +234,29 @@ export const useStore = create<Store>((set, get) => {
         if (remoteUsers.length > 0) {
           const previousLocalUser = session ? localUsers.find((u) => u.id === session!.userId) : undefined
           users = remoteUsers
-          const [remoteTasks, remoteSubmissions, remoteTransactions] = await Promise.all([
-            fetchAll<Task>('sync_tasks'),
-            fetchAll<TaskSubmission>('sync_submissions'),
-            fetchAll<Transaction>('sync_transactions'),
-          ])
+          const [remoteTasks, remoteSubmissions, remoteTransactions, remoteSavingsGoals, remoteSettingsRows] =
+            await Promise.all([
+              fetchAll<Task>('sync_tasks'),
+              fetchAll<TaskSubmission>('sync_submissions'),
+              fetchAll<Transaction>('sync_transactions'),
+              fetchAll<SavingsGoal>('sync_savings_goals'),
+              fetchAll<Settings>('sync_settings'),
+            ])
           if (remoteTasks.length > 0) tasks = remoteTasks
           submissions = remoteSubmissions
           transactions = remoteTransactions
+          savingsGoals = remoteSavingsGoals
+          if (remoteSettingsRows.length > 0) {
+            settings = normalizeSettings(remoteSettingsRows[0])
+          } else {
+            pushRecord('sync_settings', 'main', settings)
+          }
           save('users', users)
           save('tasks', tasks)
           save('submissions', submissions)
           save('transactions', transactions)
+          save('savingsGoals', savingsGoals)
+          save('settings', settings)
 
           // Cet appareil avait son propre id local pour l'utilisateur connecté :
           // on le fait correspondre au bon compte partagé via son nom.
@@ -246,12 +283,15 @@ export const useStore = create<Store>((set, get) => {
           save('settings', settings)
           for (const u of users) pushRecord('sync_users', u.id, u)
           for (const t of tasks) pushRecord('sync_tasks', t.id, t)
+          pushRecord('sync_settings', 'main', settings)
         } else {
           // Appareil déjà utilisé avant l'ajout de la synchro : publie ses données locales.
           for (const u of users) pushRecord('sync_users', u.id, u)
           for (const t of tasks) pushRecord('sync_tasks', t.id, t)
           for (const s of submissions) pushRecord('sync_submissions', s.id, s)
           for (const tr of transactions) pushRecord('sync_transactions', tr.id, tr)
+          for (const g of savingsGoals) pushRecord('sync_savings_goals', g.id, g)
+          pushRecord('sync_settings', 'main', settings)
         }
       } catch (e) {
         console.error('❌ Sync : initialisation distante échouée, poursuite en local', e)
@@ -279,23 +319,48 @@ export const useStore = create<Store>((set, get) => {
         save('session', null)
       }
 
-      set({ ready: true, users, tasks, submissions, transactions, logs, messages, notifications, settings, session })
+      set({
+        ready: true,
+        users,
+        tasks,
+        submissions,
+        transactions,
+        savingsGoals,
+        logs,
+        messages,
+        notifications,
+        settings,
+        session,
+      })
     },
 
     syncFromRemote: async () => {
       try {
-        const [remoteUsers, remoteTasks, remoteSubmissions, remoteTransactions] = await Promise.all([
-          fetchAll<User>('sync_users'),
-          fetchAll<Task>('sync_tasks'),
-          fetchAll<TaskSubmission>('sync_submissions'),
-          fetchAll<Transaction>('sync_transactions'),
-        ])
+        const [remoteUsers, remoteTasks, remoteSubmissions, remoteTransactions, remoteSavingsGoals, remoteSettingsRows] =
+          await Promise.all([
+            fetchAll<User>('sync_users'),
+            fetchAll<Task>('sync_tasks'),
+            fetchAll<TaskSubmission>('sync_submissions'),
+            fetchAll<Transaction>('sync_transactions'),
+            fetchAll<SavingsGoal>('sync_savings_goals'),
+            fetchAll<Settings>('sync_settings'),
+          ])
         if (remoteUsers.length === 0) return // rien à réconcilier (pas encore de famille distante)
-        set({ users: remoteUsers, tasks: remoteTasks, submissions: remoteSubmissions, transactions: remoteTransactions })
+        const settings = remoteSettingsRows.length > 0 ? normalizeSettings(remoteSettingsRows[0]) : get().settings
+        set({
+          users: remoteUsers,
+          tasks: remoteTasks,
+          submissions: remoteSubmissions,
+          transactions: remoteTransactions,
+          savingsGoals: remoteSavingsGoals,
+          settings,
+        })
         save('users', remoteUsers)
         save('tasks', remoteTasks)
         save('submissions', remoteSubmissions)
         save('transactions', remoteTransactions)
+        save('savingsGoals', remoteSavingsGoals)
+        save('settings', settings)
       } catch (e) {
         console.error('❌ Sync : rafraîchissement distant échoué', e)
       }
@@ -314,6 +379,12 @@ export const useStore = create<Store>((set, get) => {
     receiveRemoteDelete: (key, id) => {
       set((s) => ({ [key]: (s[key] as Array<{ id: string }>).filter((r) => r.id !== id) }) as Partial<Store>)
       save(key, get()[key])
+    },
+
+    receiveRemoteSettings: (settings) => {
+      const merged = normalizeSettings(settings)
+      set({ settings: merged })
+      save('settings', merged)
     },
 
     toast: (message, kind = 'success') => {
@@ -641,9 +712,39 @@ export const useStore = create<Store>((set, get) => {
     },
 
     updateSettings: (patch, actorId) => {
-      set((s) => ({ settings: { ...s.settings, ...patch } }))
+      const next = { ...get().settings, ...patch }
+      set({ settings: next })
       pushLog('settings_updated', actorId, Object.keys(patch).join(', '))
-      persist('settings')
+      save('settings', next)
+      // Les réglages (dont les fonctionnalités activées) sont partagés en famille,
+      // pas seulement sur cet appareil.
+      pushRecord('sync_settings', 'main', next)
+    },
+
+    addSavingsGoal: (childId, title, icon, targetAmount, actorId) => {
+      const trimmed = title.trim()
+      if (!trimmed || targetAmount <= 0) return
+      const goal: SavingsGoal = {
+        id: uid(),
+        childId,
+        title: trimmed,
+        icon,
+        targetAmount,
+        createdBy: actorId,
+        createdAt: Date.now(),
+      }
+      set((s) => ({ savingsGoals: [goal, ...s.savingsGoals] }))
+      pushLog('savings_goal_created', actorId, `« ${trimmed} » (${formatEuro(targetAmount)})`, childId)
+      persist('savingsGoals')
+    },
+
+    deleteSavingsGoal: (goalId, actorId) => {
+      const goal = get().savingsGoals.find((g) => g.id === goalId)
+      if (!goal) return
+      set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== goalId) }))
+      pushLog('savings_goal_deleted', actorId, `« ${goal.title} »`, goal.childId)
+      persist('savingsGoals')
+      deleteRecord('sync_savings_goals', goalId)
     },
   }
 })

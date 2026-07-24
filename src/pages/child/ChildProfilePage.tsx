@@ -10,6 +10,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ChildAvatar } from '../../components/ui/ChildAvatar'
 import { PushNotificationsCard } from '../../components/ui/PushNotificationsCard'
+import { SavingsGoalsSection } from '../../components/ui/SavingsGoalsSection'
 import { cn } from '../../lib/cn'
 import { computeBadges } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
@@ -21,6 +22,7 @@ const WEEK = { weekStartsOn: 1 as const }
 export function ChildProfilePage() {
   const user = useCurrentUser()
   const users = useStore((s) => s.users)
+  const settings = useStore((s) => s.settings)
   const transactions = useStore((s) => s.transactions)
   const submissions = useStore((s) => s.submissions)
   const messages = useStore((s) => s.messages)
@@ -99,7 +101,7 @@ export function ChildProfilePage() {
           cents={computeBalance(transactions, user.id)}
           className="font-display text-3xl font-bold"
         />
-        {rank !== null && (
+        {settings.features.leaderboard && rank !== null && (
           <p className="rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
             {medals[rank - 1] ?? '🏅'} {rank === 1 ? 'MVP du mois !' : `${rank}ᵉ ce mois-ci`}
           </p>
@@ -161,6 +163,14 @@ export function ChildProfilePage() {
           ))}
         </div>
       </section>
+
+      {settings.features.savingsGoals && (
+        <SavingsGoalsSection
+          childId={user.id}
+          balance={computeBalance(transactions, user.id)}
+          actorId={user.id}
+        />
+      )}
 
       {myMessages.length > 0 && (
         <section>

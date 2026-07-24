@@ -7,10 +7,10 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 
-// PWA : sans Ã§a, une app installÃ©e sur mobile peut rester bloquÃ©e indÃ©finiment sur une
-// vieille version tant qu'on ne la dÃ©sinstalle pas â le navigateur ne revÃ©rifie les mises
-// Ã  jour que rarement. On force la vÃ©rification Ã  chaque retour au premier plan et on
-// recharge automatiquement dÃ¨s qu'un nouveau service worker prend la main.
+// PWA : sans ça, une app installée sur mobile peut rester bloquée indéfiniment sur une
+// vieille version tant qu'on ne la désinstalle pas — le navigateur ne revérifie les mises
+// à jour que rarement. On force la vérification à chaque retour au premier plan et on
+// recharge automatiquement dès qu'un nouveau service worker prend la main.
 if ('serviceWorker' in navigator) {
   let reloading = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {

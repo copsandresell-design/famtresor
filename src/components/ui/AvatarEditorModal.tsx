@@ -33,6 +33,7 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
     setBusy(true)
     try {
       // Passe l'userId pour que la photo soit uploadée vers Supabase (sync cross-device)
+      // Clé = nom (stable sur tous les appareils, contrairement à l'id local aléatoire)
       const id = await addPhoto(pending.file, user.name)
       if (user.photoId) void deletePhoto(user.photoId)
       updateAvatar(user.id, { photoId: id }, actorId)

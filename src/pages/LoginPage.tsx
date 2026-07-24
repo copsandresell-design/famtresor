@@ -161,20 +161,27 @@ export function LoginPage() {
             className="flex flex-col items-center gap-8"
           >
             <div className="text-center">
-              <p className="text-5xl" aria-hidden>
+              <motion.div
+                initial={{ scale: 0.7, rotate: -8 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', damping: 12, stiffness: 200 }}
+                className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 text-4xl shadow-lg shadow-amber-500/30"
+                aria-hidden
+              >
                 💰
-              </p>
-              <h1 className="mt-2 text-3xl font-black">FamTrésor</h1>
+              </motion.div>
+              <h1 className="mt-4 font-display text-3xl font-black">FamTrésor</h1>
               <p className="mt-1 text-slate-500 dark:text-slate-400">Vous êtes qui ?</p>
             </div>
             <div className="grid w-full max-w-md grid-cols-2 gap-4">
               {users.map((user) => (
                 <motion.button
                   key={user.id}
-                  whileHover={{ y: -3 }}
+                  whileHover={{ y: -4 }}
                   whileTap={{ scale: 0.96 }}
                   onClick={() => setSelected(user)}
-                  className="flex flex-col items-center gap-3 rounded-2xl bg-white p-6 shadow-sm hover:shadow-md dark:bg-slate-900 cursor-pointer"
+                  className="flex flex-col items-center gap-3 rounded-2xl border border-transparent bg-white p-6 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_8px_24px_-12px_rgb(15_23_42/0.08)] transition-all hover:shadow-md dark:bg-slate-900 cursor-pointer"
+                  style={{ borderTopColor: user.color, borderTopWidth: 3 }}
                 >
                   <ChildAvatar user={user} size="lg" />
                   <span className="font-bold">{user.name}</span>

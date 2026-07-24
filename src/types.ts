@@ -137,8 +137,10 @@ export type NotificationType =
 
 export interface AppNotification {
   id: string
-  /** Destinataire */
+  /** Destinataire (id local à l'appareil émetteur) */
   userId: string
+  /** Nom du destinataire — stable entre appareils, sert à router la notification reçue */
+  userName?: string
   type: NotificationType
   title: string
   message: string
