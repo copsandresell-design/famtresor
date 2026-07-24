@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { Field, inputCls } from '../../components/ui/Field'
+import { PushNotificationsCard } from '../../components/ui/PushNotificationsCard'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { Theme } from '../../types'
@@ -97,6 +98,8 @@ export function SettingsPage() {
           </select>
         </Field>
       </Card>
+
+      <PushNotificationsCard userId={user.id} />
 
       <Card className="space-y-4 p-5">
         <h2 className="font-bold">Sécurité</h2>
