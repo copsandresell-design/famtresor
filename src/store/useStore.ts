@@ -7,6 +7,7 @@ import { formatEuro } from '../lib/format'
 import { uid } from '../lib/id'
 import { broadcastNotification } from '../lib/realtime'
 import { isTaskAvailable } from '../lib/recurrence'
+import { deleteRecord, fetchAll, pushRecord, type SyncTable } from '../lib/sync'
 import type {
   AppNotification,
   AuditLog,
@@ -47,6 +48,13 @@ interface Store {
   toasts: Toast[]
 
   init: () => Promise<void>
+  /** RÃ©concilie l'Ã©tat local avec Supabase (familles, tÃ¢ches, soumissions, transactions partagÃ©es). */
+  syncFromRemote: () => Promise<void>
+  receiveRemoteUpsert: (
+    key: 'users' | 'tasks' | 'submissions' | 'transactions',
+    record: User | Task | TaskSubmission | Transaction,
+  ) => void
+  receiveRemoteDelete: (key: 'users' | 'tasks' | 'submissions' | 'transactions', id: string) => void
   toast: (message: string, kind?: Toast['kind']) => void
   dismissToast: (id: number) => void
 
@@ -96,6 +104,13 @@ interface Store {
 
 let toastSeq = 0
 
+const SYNCED_KEYS = ['users', 'tasks', 'submissions', 'transactions'] as const
+type SyncedKey = (typeof SYNCED_KEYS)[number]
+
+function syncTableFor(key: SyncedKey): SyncTable {
+  return `sync_${key}` as SyncTable
+}
+
 export const useStore = create<Store>((set, get) => {
   function persist(
     key:
@@ -108,7 +123,17 @@ export const useStore = create<Store>((set, get) => {
       | 'notifications'
       | 'settings',
   ) {
-    save(key, get()[key])
+    const value = get()[key]
+    save(key, value)
+    // Familles, tÃ¢ches, soumissions et transactions sont partagÃ©es entre appareils :
+    // chaque Ã©criture locale republie l'ensemble du tableau vers Supabase (petits
+    // volumes, donc pas besoin de diff fin â plus simple et plus sÃ»r).
+    if ((SYNCED_KEYS as readonly string[]).includes(key)) {
+      const table = syncTableFor(key as SyncedKey)
+      for (const record of value as Array<{ id: string }>) {
+        pushRecord(table, record.id, record)
+      }
+    }
   }
 
   function pushLog(action: string, actorId: string, details: string, subjectId?: string, amount?: number) {
@@ -128,7 +153,6 @@ export const useStore = create<Store>((set, get) => {
     const notif: AppNotification = {
       id: uid(),
       userId,
-      userName: get().users.find((u) => u.id === userId)?.name,
       type,
       title,
       message,
@@ -162,32 +186,89 @@ export const useStore = create<Store>((set, get) => {
     toasts: [],
 
     init: async () => {
-      let users = await load<User[]>('users', [])
+      const localUsers = await load<User[]>('users', [])
+      let users = localUsers
       let tasks = await load<Task[]>('tasks', [])
-      const submissions = await load<TaskSubmission[]>('submissions', [])
-      const transactions = await load<Transaction[]>('transactions', [])
+      let submissions = await load<TaskSubmission[]>('submissions', [])
+      let transactions = await load<Transaction[]>('transactions', [])
       const messages = await load<Message[]>('messages', [])
       const notifications = await load<AppNotification[]>('notifications', [])
       let logs = await load<AuditLog[]>('logs', [])
       const settings = await load<Settings>('settings', defaultSettings)
       let session = await load<Session | null>('session', null)
 
-      if (users.length === 0) {
-        users = await seedUsers()
-        tasks = seedTasks(users)
-        logs = [
-          {
-            id: uid(),
-            action: 'seed',
-            actorId: users[0].id,
-            details: 'Création de la famille et des tâches de base',
-            timestamp: Date.now(),
-          },
-        ]
-        save('users', users)
-        save('tasks', tasks)
-        save('logs', logs)
-        save('settings', settings)
+      // Les identifiants d'utilisateur/tÃ¢che sont gÃ©nÃ©rÃ©s localement Ã  chaque appareil :
+      // sans rÃ©conciliation, deux appareils ne parlent jamais de la mÃªme famille.
+      // Supabase fait autoritÃ© dÃ¨s qu'il contient des donnÃ©es ; sinon cet appareil sÃ¨me.
+      try {
+        const remoteUsers = await fetchAll<User>('sync_users')
+        if (remoteUsers.length > 0) {
+          const previousLocalUser = session ? localUsers.find((u) => u.id === session!.userId) : undefined
+          users = remoteUsers
+          const [remoteTasks, remoteSubmissions, remoteTransactions] = await Promise.all([
+            fetchAll<Task>('sync_tasks'),
+            fetchAll<TaskSubmission>('sync_submissions'),
+            fetchAll<Transaction>('sync_transactions'),
+          ])
+          if (remoteTasks.length > 0) tasks = remoteTasks
+          submissions = remoteSubmissions
+          transactions = remoteTransactions
+          save('users', users)
+          save('tasks', tasks)
+          save('submissions', submissions)
+          save('transactions', transactions)
+
+          // Cet appareil avait son propre id local pour l'utilisateur connectÃ© :
+          // on le fait correspondre au bon compte partagÃ© via son nom.
+          if (session && !users.some((u) => u.id === session!.userId)) {
+            const byName = previousLocalUser ? users.find((u) => u.name === previousLocalUser.name) : undefined
+            session = byName ? { ...session, userId: byName.id } : null
+            save('session', session)
+          }
+        } else if (users.length === 0) {
+          users = await seedUsers()
+          tasks = seedTasks(users)
+          logs = [
+            {
+              id: uid(),
+              action: 'seed',
+              actorId: users[0].id,
+              details: 'CrÃ©ation de la famille et des tÃ¢ches de base',
+              timestamp: Date.now(),
+            },
+          ]
+          save('users', users)
+          save('tasks', tasks)
+          save('logs', logs)
+          save('settings', settings)
+          for (const u of users) pushRecord('sync_users', u.id, u)
+          for (const t of tasks) pushRecord('sync_tasks', t.id, t)
+        } else {
+          // Appareil dÃ©jÃ  utilisÃ© avant l'ajout de la synchro : publie ses donnÃ©es locales.
+          for (const u of users) pushRecord('sync_users', u.id, u)
+          for (const t of tasks) pushRecord('sync_tasks', t.id, t)
+          for (const s of submissions) pushRecord('sync_submissions', s.id, s)
+          for (const tr of transactions) pushRecord('sync_transactions', tr.id, tr)
+        }
+      } catch (e) {
+        console.error('â Sync : initialisation distante Ã©chouÃ©e, poursuite en local', e)
+        if (users.length === 0) {
+          users = await seedUsers()
+          tasks = seedTasks(users)
+          logs = [
+            {
+              id: uid(),
+              action: 'seed',
+              actorId: users[0].id,
+              details: 'CrÃ©ation de la famille et des tÃ¢ches de base',
+              timestamp: Date.now(),
+            },
+          ]
+          save('users', users)
+          save('tasks', tasks)
+          save('logs', logs)
+          save('settings', settings)
+        }
       }
 
       if (session && session.expiresAt < Date.now()) {
@@ -196,6 +277,40 @@ export const useStore = create<Store>((set, get) => {
       }
 
       set({ ready: true, users, tasks, submissions, transactions, logs, messages, notifications, settings, session })
+    },
+
+    syncFromRemote: async () => {
+      try {
+        const [remoteUsers, remoteTasks, remoteSubmissions, remoteTransactions] = await Promise.all([
+          fetchAll<User>('sync_users'),
+          fetchAll<Task>('sync_tasks'),
+          fetchAll<TaskSubmission>('sync_submissions'),
+          fetchAll<Transaction>('sync_transactions'),
+        ])
+        if (remoteUsers.length === 0) return // rien Ã  rÃ©concilier (pas encore de famille distante)
+        set({ users: remoteUsers, tasks: remoteTasks, submissions: remoteSubmissions, transactions: remoteTransactions })
+        save('users', remoteUsers)
+        save('tasks', remoteTasks)
+        save('submissions', remoteSubmissions)
+        save('transactions', remoteTransactions)
+      } catch (e) {
+        console.error('â Sync : rafraÃ®chissement distant Ã©chouÃ©', e)
+      }
+    },
+
+    receiveRemoteUpsert: (key, record) => {
+      set((s) => {
+        const arr = s[key] as Array<{ id: string }>
+        const idx = arr.findIndex((r) => r.id === (record as { id: string }).id)
+        const next = idx === -1 ? [record, ...arr] : arr.map((r) => (r.id === (record as { id: string }).id ? record : r))
+        return { [key]: next } as Partial<Store>
+      })
+      save(key, get()[key])
+    },
+
+    receiveRemoteDelete: (key, id) => {
+      set((s) => ({ [key]: (s[key] as Array<{ id: string }>).filter((r) => r.id !== id) }) as Partial<Store>)
+      save(key, get()[key])
     },
 
     toast: (message, kind = 'success') => {
@@ -239,7 +354,7 @@ export const useStore = create<Store>((set, get) => {
       const session: Session = { userId, role: user.role, expiresAt: Date.now() + SESSION_DURATION }
       set({ session })
       save('session', session)
-      pushLog('login', userId, `${user.name} s'est connecté(e)`)
+      pushLog('login', userId, `${user.name} s'est connectÃ©(e)`)
       return true
     },
 
@@ -267,20 +382,20 @@ export const useStore = create<Store>((set, get) => {
         const before = get().tasks.find((t) => t.id === id)
         newlyAssigned = fields.assignedTo.filter((c) => !before?.assignedTo.includes(c))
         set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...fields } : t)) }))
-        pushLog('task_updated', actorId, `« ${fields.title} »`, undefined, fields.amount)
+        pushLog('task_updated', actorId, `Â« ${fields.title} Â»`, undefined, fields.amount)
       } else {
         const task: Task = { ...fields, id: uid(), createdBy: actorId, createdAt: Date.now(), isActive: true }
         newlyAssigned = task.assignedTo
         set((s) => ({ tasks: [task, ...s.tasks] }))
-        pushLog('task_created', actorId, `« ${task.title} »`, undefined, task.amount)
+        pushLog('task_created', actorId, `Â« ${task.title} Â»`, undefined, task.amount)
       }
       persist('tasks')
       for (const childId of newlyAssigned) {
         notify(
           childId,
           'task_assigned',
-          'Nouvelle tâche pour toi !',
-          `${fields.title} · +${formatEuro(fields.amount)}`,
+          'Nouvelle tÃ¢che pour toi !',
+          `${fields.title} Â· +${formatEuro(fields.amount)}`,
           fields.icon,
           '/enfant',
         )
@@ -291,8 +406,9 @@ export const useStore = create<Store>((set, get) => {
       const task = get().tasks.find((t) => t.id === taskId)
       if (!task) return
       set((s) => ({ tasks: s.tasks.filter((t) => t.id !== taskId) }))
-      pushLog('task_deleted', actorId, `« ${task.title} »`, undefined, task.amount)
+      pushLog('task_deleted', actorId, `Â« ${task.title} Â»`, undefined, task.amount)
       persist('tasks')
+      deleteRecord('sync_tasks', taskId)
     },
 
     submitTask: (taskId, childId, { isInitiative, photoIds, comment }) => {
@@ -314,7 +430,7 @@ export const useStore = create<Store>((set, get) => {
       pushLog(
         'task_submitted',
         childId,
-        `« ${task.title} »${isInitiative ? ' ⭐ initiative' : ''}${photoIds?.length ? ` · ${photoIds.length} photo(s)` : ''}`,
+        `Â« ${task.title} Â»${isInitiative ? ' â­ initiative' : ''}${photoIds?.length ? ` Â· ${photoIds.length} photo(s)` : ''}`,
         childId,
         task.amount,
       )
@@ -322,8 +438,8 @@ export const useStore = create<Store>((set, get) => {
       const child = get().users.find((u) => u.id === childId)
       notifyParents(
         'task_submitted',
-        `${child?.name ?? 'Un enfant'} a terminé une tâche`,
-        `${task.title}${isInitiative ? ' ⭐ initiative' : ''} · à valider`,
+        `${child?.name ?? 'Un enfant'} a terminÃ© une tÃ¢che`,
+        `${task.title}${isInitiative ? ' â­ initiative' : ''} Â· Ã  valider`,
         task.icon,
         '/parent/validations',
       )
@@ -335,10 +451,10 @@ export const useStore = create<Store>((set, get) => {
       if (!trimmed) return
       const message: Message = { id: uid(), fromId, toChildId, text: trimmed, createdAt: Date.now() }
       set((s) => ({ messages: [message, ...s.messages] }))
-      pushLog('message_sent', fromId, `« ${trimmed} »`, toChildId)
+      pushLog('message_sent', fromId, `Â« ${trimmed} Â»`, toChildId)
       persist('messages')
       const from = get().users.find((u) => u.id === fromId)
-      notify(toChildId, 'message', `Message de ${from?.name ?? 'tes parents'}`, trimmed, '💌', '/enfant/profil')
+      notify(toChildId, 'message', `Message de ${from?.name ?? 'tes parents'}`, trimmed, 'ð', '/enfant/profil')
     },
 
     approveSubmission: (submissionId, parentId) => {
@@ -353,7 +469,7 @@ export const useStore = create<Store>((set, get) => {
         type: 'task_approval',
         childId: sub.childId,
         amount,
-        description: `${task.icon} ${task.title}${bonus > 0 ? ' ⭐ initiative' : ''}`,
+        description: `${task.icon} ${task.title}${bonus > 0 ? ' â­ initiative' : ''}`,
         relatedTo: sub.id,
         createdBy: parentId,
         createdAt: Date.now(),
@@ -366,14 +482,14 @@ export const useStore = create<Store>((set, get) => {
         ),
         transactions: [transaction, ...s.transactions],
       }))
-      pushLog('submission_approved', parentId, `« ${task.title} »`, sub.childId, amount)
+      pushLog('submission_approved', parentId, `Â« ${task.title} Â»`, sub.childId, amount)
       persist('submissions')
       persist('transactions')
       notify(
         sub.childId,
         'task_approved',
-        'Tâche validée ! 🎉',
-        `${task.title} · +${formatEuro(amount)}${bonus > 0 ? ' (bonus initiative inclus)' : ''}`,
+        'TÃ¢che validÃ©e ! ð',
+        `${task.title} Â· +${formatEuro(amount)}${bonus > 0 ? ' (bonus initiative inclus)' : ''}`,
         task.icon,
         '/enfant',
       )
@@ -391,14 +507,14 @@ export const useStore = create<Store>((set, get) => {
             : x,
         ),
       }))
-      pushLog('submission_rejected', parentId, `« ${task?.title ?? '?'} » — ${reason || 'sans motif'}`, sub.childId)
+      pushLog('submission_rejected', parentId, `Â« ${task?.title ?? '?'} Â» â ${reason || 'sans motif'}`, sub.childId)
       persist('submissions')
       notify(
         sub.childId,
         'task_rejected',
-        'Tâche refusée',
-        `${task?.title ?? 'Tâche'}${reason ? ` — ${reason}` : ''}`,
-        '😕',
+        'TÃ¢che refusÃ©e',
+        `${task?.title ?? 'TÃ¢che'}${reason ? ` â ${reason}` : ''}`,
+        'ð',
         '/enfant',
       )
     },
@@ -408,7 +524,7 @@ export const useStore = create<Store>((set, get) => {
       const debit = -Math.abs(amount)
       if (computeBalance(transactions, childId) + debit < settings.minBalance) {
         get().toast(
-          `Impossible : le solde passerait sous le minimum toléré (${settings.minBalance / 100} €).`,
+          `Impossible : le solde passerait sous le minimum tolÃ©rÃ© (${settings.minBalance / 100} â¬).`,
           'error',
         )
         return false
@@ -418,19 +534,19 @@ export const useStore = create<Store>((set, get) => {
         type: 'penalty',
         childId,
         amount: debit,
-        description: `⚠️ ${title}${motif ? ` — ${motif}` : ''}`,
+        description: `â ï¸ ${title}${motif ? ` â ${motif}` : ''}`,
         createdBy: parentId,
         createdAt: Date.now(),
       }
       set((s) => ({ transactions: [transaction, ...s.transactions] }))
-      pushLog('penalty_applied', parentId, `« ${title} »${motif ? ` — ${motif}` : ''}`, childId, debit)
+      pushLog('penalty_applied', parentId, `Â« ${title} Â»${motif ? ` â ${motif}` : ''}`, childId, debit)
       persist('transactions')
       notify(
         childId,
         'penalty',
-        'Pénalité appliquée',
-        `${title} · ${formatEuro(debit)}`,
-        '⚠️',
+        'PÃ©nalitÃ© appliquÃ©e',
+        `${title} Â· ${formatEuro(debit)}`,
+        'â ï¸',
         '/enfant/historique',
       )
       return true
@@ -440,7 +556,7 @@ export const useStore = create<Store>((set, get) => {
       const tx = get().transactions.find((t) => t.id === transactionId)
       if (!tx || tx.type !== 'penalty' || tx.cancelled) return
       if (Date.now() - tx.createdAt > PENALTY_CANCEL_WINDOW) {
-        get().toast('Trop tard : une pénalité ne peut être annulée que sous 24 h.', 'error')
+        get().toast('Trop tard : une pÃ©nalitÃ© ne peut Ãªtre annulÃ©e que sous 24 h.', 'error')
         return
       }
       const reversal: Transaction = {
@@ -448,7 +564,7 @@ export const useStore = create<Store>((set, get) => {
         type: 'penalty_cancel',
         childId: tx.childId,
         amount: -tx.amount,
-        description: `Annulation — ${tx.description}`,
+        description: `Annulation â ${tx.description}`,
         relatedTo: tx.id,
         createdBy: parentId,
         createdAt: Date.now(),
@@ -471,12 +587,12 @@ export const useStore = create<Store>((set, get) => {
         type: 'manual_adjustment',
         childId,
         amount: -balance,
-        description: 'Réinitialisation du solde',
+        description: 'RÃ©initialisation du solde',
         createdBy: parentId,
         createdAt: Date.now(),
       }
       set((s) => ({ transactions: [transaction, ...s.transactions] }))
-      pushLog('balance_reset', parentId, 'Solde remis à zéro', childId, -balance)
+      pushLog('balance_reset', parentId, 'Solde remis Ã  zÃ©ro', childId, -balance)
       persist('transactions')
     },
 
@@ -504,7 +620,7 @@ export const useStore = create<Store>((set, get) => {
         }),
       }))
       const user = get().users.find((u) => u.id === userId)
-      pushLog('avatar_changed', actorId, `Avatar de ${user?.name ?? '?'} modifié`, userId)
+      pushLog('avatar_changed', actorId, `Avatar de ${user?.name ?? '?'} modifiÃ©`, userId)
       persist('users')
     },
 
@@ -517,7 +633,7 @@ export const useStore = create<Store>((set, get) => {
         ),
       }))
       const user = get().users.find((u) => u.id === userId)
-      pushLog('secret_changed', actorId, `Code d'accès de ${user?.name ?? '?'} modifié`, userId)
+      pushLog('secret_changed', actorId, `Code d'accÃ¨s de ${user?.name ?? '?'} modifiÃ©`, userId)
       persist('users')
     },
 
