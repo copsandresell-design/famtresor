@@ -11,7 +11,7 @@ import { DEFAULT_RANK_DEFS } from '../lib/ranks'
 import { broadcastNotification } from '../lib/realtime'
 import { sendPushTo } from '../lib/push'
 import { isTaskAvailable } from '../lib/recurrence'
-import { computeStreakDefCount, DEFAULT_STREAK_DEFS } from '../lib/streak'
+import { computeStreakDefCount } from '../lib/streak'
 import { deleteRecord, fetchAll, pushRecord, type SyncTable } from '../lib/sync'
 import type {
   AppNotification,
@@ -593,7 +593,7 @@ export const useStore = create<Store>((set, get) => {
           penaltyRules = remotePenaltyRules
           shopItems = remoteShopItems
           redemptions = remoteRedemptions
-          streakDefs = withDefaults(remoteStreakDefs, DEFAULT_STREAK_DEFS, 'sync_streak_defs')
+          streakDefs = withDefaults(remoteStreakDefs, seedStreakDefs(tasks), 'sync_streak_defs')
           badgeDefs = withDefaults(remoteBadgeDefs, DEFAULT_BADGE_DEFS, 'sync_badge_defs')
           rankDefs = withDefaults(remoteRankDefs, DEFAULT_RANK_DEFS, 'sync_rank_defs')
           if (remoteSettingsRows.length > 0) {
@@ -655,7 +655,7 @@ export const useStore = create<Store>((set, get) => {
           pushRecord('sync_settings', 'main', settings)
         } else {
           // Appareil déjà utilisé avant l'ajout de la synchro : publie ses données locales.
-          if (streakDefs.length === 0) streakDefs = DEFAULT_STREAK_DEFS
+          if (streakDefs.length === 0) streakDefs = seedStreakDefs(tasks)
           if (badgeDefs.length === 0) badgeDefs = DEFAULT_BADGE_DEFS
           if (rankDefs.length === 0) rankDefs = DEFAULT_RANK_DEFS
           save('streakDefs', streakDefs)
@@ -702,7 +702,7 @@ export const useStore = create<Store>((set, get) => {
           save('badgeDefs', badgeDefs)
           save('rankDefs', rankDefs)
         } else {
-          if (streakDefs.length === 0) streakDefs = DEFAULT_STREAK_DEFS
+          if (streakDefs.length === 0) streakDefs = seedStreakDefs(tasks)
           if (badgeDefs.length === 0) badgeDefs = DEFAULT_BADGE_DEFS
           if (rankDefs.length === 0) rankDefs = DEFAULT_RANK_DEFS
         }
