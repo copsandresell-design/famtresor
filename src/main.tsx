@@ -6,11 +6,14 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
+import { setNeedRefresh } from './lib/pwaUpdate'
 
 // PWA : sans ça, une app installée sur mobile peut rester bloquée indéfiniment sur une
 // vieille version tant qu'on ne la désinstalle pas — le navigateur ne revérifie les mises
-// à jour que rarement. On force la vérification à chaque retour au premier plan et on
-// recharge automatiquement dès qu'un nouveau service worker prend la main.
+// à jour que rarement, ET un nouveau service worker installé reste en attente tant qu'on
+// ne l'active pas explicitement (skipWaiting). On force la vérification à chaque retour au
+// premier plan, on affiche un bandeau (voir UpdateBanner.tsx) dès qu'une mise à jour est
+// prête, et on recharge automatiquement dès que le nouveau service worker prend la main.
 if ('serviceWorker' in navigator) {
   let reloading = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -21,6 +24,9 @@ if ('serviceWorker' in navigator) {
 
   const updateSW = registerSW({
     immediate: true,
+    onNeedRefresh() {
+      setNeedRefresh(updateSW)
+    },
     onRegisteredSW(_url, registration) {
       if (!registration) return
       const checkForUpdate = () => void registration.update()
@@ -31,7 +37,6 @@ if ('serviceWorker' in navigator) {
       setInterval(checkForUpdate, 60_000)
     },
   })
-  void updateSW
 }
 
 createRoot(document.getElementById('root')!).render(

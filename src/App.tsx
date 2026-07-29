@@ -5,6 +5,7 @@ import { ChildLayout } from './components/layout/ChildLayout'
 import { ParentLayout } from './components/layout/ParentLayout'
 import { AmbientBackground } from './components/ui/AmbientBackground'
 import { Toaster } from './components/Toaster'
+import { UpdateBanner } from './components/UpdateBanner'
 import { useDataRealtime } from './hooks/useDataSync'
 import { useNotificationRealtime } from './hooks/useNotifications'
 import { LoginPage } from './pages/LoginPage'
@@ -71,6 +72,7 @@ export default function App() {
   if (!ready) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
+        <UpdateBanner />
         <p className="animate-pulse text-4xl" aria-label="Chargement">
           ð°
         </p>
@@ -81,6 +83,7 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
+        <UpdateBanner />
         <AmbientBackground />
         <Routes>
           {!session && <Route path="*" element={<LoginPage />} />}
