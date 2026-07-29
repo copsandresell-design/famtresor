@@ -1,33 +1,39 @@
 import { create } from 'zustand'
 import { db, load, save } from '../db/storage'
 import { defaultSettings, seedTasks, seedUsers } from '../db/seed'
-import { computeBadges } from '../lib/badges'
+import { computeBadges, DEFAULT_BADGE_DEFS } from '../lib/badges'
 import { computeBalance } from '../lib/balance'
 import { hashSecret, makeSalt, verifySecret } from '../lib/crypto'
 import { formatEuro } from '../lib/format'
 import { uid } from '../lib/id'
 import { computePoints } from '../lib/points'
+import { DEFAULT_RANK_DEFS } from '../lib/ranks'
 import { broadcastNotification } from '../lib/realtime'
 import { sendPushTo } from '../lib/push'
 import { isTaskAvailable } from '../lib/recurrence'
-import { streakMilestonesReached, STREAK_BONUS_POINTS, computeStreak } from '../lib/streak'
+import { computeStreakDefCount, DEFAULT_STREAK_DEFS } from '../lib/streak'
 import { deleteRecord, fetchAll, pushRecord, type SyncTable } from '../lib/sync'
 import type {
   AppNotification,
   AuditLog,
+  BadgeDef,
   Message,
   NotificationType,
   PenaltyRule,
   PointsTransaction,
   PointsTransactionType,
+  RankDef,
   Recurrence,
   Redemption,
   RewardClaim,
+  Role,
   SavingsGoal,
   Session,
   Settings,
   ShopCategory,
   ShopItem,
+  StreakDef,
+  StreakTier,
   Task,
   TaskSubmission,
   Transaction,
@@ -60,6 +66,9 @@ type RemoteEntityKey =
   | 'penaltyRules'
   | 'shopItems'
   | 'redemptions'
+  | 'streakDefs'
+  | 'badgeDefs'
+  | 'rankDefs'
 
 type RemoteEntity =
   | User
@@ -73,6 +82,9 @@ type RemoteEntity =
   | PenaltyRule
   | ShopItem
   | Redemption
+  | StreakDef
+  | BadgeDef
+  | RankDef
 
 interface Store {
   ready: boolean
@@ -89,6 +101,9 @@ interface Store {
   penaltyRules: PenaltyRule[]
   shopItems: ShopItem[]
   redemptions: Redemption[]
+  streakDefs: StreakDef[]
+  badgeDefs: BadgeDef[]
+  rankDefs: RankDef[]
   settings: Settings
   session: Session | null
   toasts: Toast[]
@@ -173,6 +188,47 @@ interface Store {
   changeSecret: (userId: string, newSecret: string, actorId: string) => Promise<void>
   updateSettings: (patch: Partial<Settings>, actorId: string) => void
 
+  /** Crée un nouveau profil (enfant ou parent) — utilisé par la page Enfants/Réglages. */
+  createUser: (
+    input: { role: Role; name: string; avatar: string; color: string; secret: string },
+    actorId: string,
+  ) => Promise<User>
+
+  saveStreakDef: (
+    input: {
+      id?: string
+      kind: StreakDef['kind']
+      label: string
+      emoji: string
+      taskId?: string
+      tiers: StreakTier[]
+      isActive: boolean
+    },
+    actorId: string,
+  ) => void
+  deleteStreakDef: (defId: string, actorId: string) => void
+
+  saveBadgeDef: (
+    input: {
+      id?: string
+      kind: BadgeDef['kind']
+      label: string
+      emoji: string
+      description: string
+      points: number
+      params: BadgeDef['params']
+      isActive: boolean
+    },
+    actorId: string,
+  ) => void
+  deleteBadgeDef: (defId: string, actorId: string) => void
+
+  saveRankDef: (
+    input: { id?: string; label: string; emoji: string; color: string; threshold: number },
+    actorId: string,
+  ) => void
+  deleteRankDef: (defId: string, actorId: string) => void
+
   addSavingsGoal: (childId: string, title: string, icon: string, targetAmount: number, actorId: string) => void
   deleteSavingsGoal: (goalId: string, actorId: string) => void
 
@@ -212,6 +268,9 @@ const SYNCED_KEYS = [
   'penaltyRules',
   'shopItems',
   'redemptions',
+  'streakDefs',
+  'badgeDefs',
+  'rankDefs',
 ] as const
 type SyncedKey = (typeof SYNCED_KEYS)[number]
 
@@ -226,10 +285,25 @@ const SYNC_TABLE_FOR: Record<SyncedKey, SyncTable> = {
   penaltyRules: 'sync_penalty_rules',
   shopItems: 'sync_shop_items',
   redemptions: 'sync_redemptions',
+  streakDefs: 'sync_streak_defs',
+  badgeDefs: 'sync_badge_defs',
+  rankDefs: 'sync_rank_defs',
 }
 
 function syncTableFor(key: SyncedKey): SyncTable {
   return SYNC_TABLE_FOR[key]
+}
+
+/**
+ * Catalogues (séries/badges/rangs) : si Supabase ne contient encore aucune ligne pour cette
+ * table (première ouverture de l'app après ce changement, ou famille jamais synchronisée),
+ * on démarre avec le catalogue par défaut et on le publie immédiatement — il devient ainsi
+ * une donnée réelle en base, éditable depuis l'app sans redéploiement.
+ */
+function withDefaults<T extends { id: string }>(remote: T[], defaults: T[], table: SyncTable): T[] {
+  if (remote.length > 0) return remote
+  for (const d of defaults) pushRecord(table, d.id, d)
+  return defaults
 }
 
 /** Fusionne les réglages chargés (potentiellement anciens, avec des champs manquants) avec les valeurs par défaut. */
@@ -257,7 +331,10 @@ export const useStore = create<Store>((set, get) => {
       | 'rewardClaims'
       | 'penaltyRules'
       | 'shopItems'
-      | 'redemptions',
+      | 'redemptions'
+      | 'streakDefs'
+      | 'badgeDefs'
+      | 'rankDefs',
   ) {
     const value = get()[key]
     save(key, value)
@@ -349,30 +426,56 @@ export const useStore = create<Store>((set, get) => {
     notify(childId, 'reward_earned', `+${points} points !`, title, '🏅', '/enfant/profil')
   }
 
-  /** Vérifie, pour chaque enfant, si de nouveaux badges ou paliers de série méritent des points — idempotent via rewardClaims. */
+  /**
+   * Vérifie, pour chaque enfant, si de nouveaux paliers de série ou badges méritent des
+   * points — idempotent via rewardClaims. Les séries sont traitées avant les badges : certains
+   * badges (streak_tier) se déverrouillent justement en observant la présence du claim de
+   * série correspondant (voir computeBadges).
+   */
   function checkRewards(actorId: string) {
-    const { users, submissions, pointsTransactions } = get()
+    const { users, submissions, transactions, tasks, savingsGoals, redemptions, streakDefs, badgeDefs } = get()
     const children = users.filter((u) => u.role === 'child' && u.isActive)
+    const now = new Date()
+
     for (const child of children) {
-      const badges = computeBadges({ childId: child.id, submissions, pointsTransactions, children })
+      for (const def of streakDefs.filter((d) => d.isActive)) {
+        const count = computeStreakDefCount(def, child.id, { submissions, transactions, now })
+        for (const tier of def.tiers) {
+          if (count < tier.days) continue
+          const key = `streak:${def.id}:${tier.days}`
+          if (get().rewardClaims.some((r) => r.childId === child.id && r.key === key)) continue
+          awardReward(
+            child.id,
+            key,
+            tier.points,
+            `${def.emoji} ${def.label} — ${tier.days} jours !`,
+            'streak_bonus',
+            actorId,
+          )
+        }
+      }
+    }
+
+    for (const child of children) {
+      const badges = computeBadges({
+        childId: child.id,
+        submissions,
+        pointsTransactions: get().pointsTransactions,
+        transactions,
+        tasks,
+        savingsGoals,
+        redemptions,
+        rewardClaims: get().rewardClaims,
+        streakDefs,
+        children,
+        badgeDefs,
+        now,
+      })
       for (const badge of badges) {
         if (!badge.unlocked || badge.points <= 0) continue
         const key = `badge:${badge.id}`
         if (get().rewardClaims.some((r) => r.childId === child.id && r.key === key)) continue
         awardReward(child.id, key, badge.points, `Badge débloqué : ${badge.emoji} ${badge.label}`, 'badge', actorId)
-      }
-      const streak = computeStreak(child.id, submissions)
-      for (const milestone of streakMilestonesReached(streak.count)) {
-        const key = `streak:${milestone}`
-        if (get().rewardClaims.some((r) => r.childId === child.id && r.key === key)) continue
-        awardReward(
-          child.id,
-          key,
-          STREAK_BONUS_POINTS[milestone],
-          `Série de ${milestone} jours !`,
-          'streak_bonus',
-          actorId,
-        )
       }
     }
   }
@@ -413,6 +516,9 @@ export const useStore = create<Store>((set, get) => {
     penaltyRules: [],
     shopItems: [],
     redemptions: [],
+    streakDefs: [],
+    badgeDefs: [],
+    rankDefs: [],
     settings: defaultSettings,
     session: null,
     toasts: [],
@@ -432,6 +538,9 @@ export const useStore = create<Store>((set, get) => {
       let penaltyRules = await load<PenaltyRule[]>('penaltyRules', [])
       let shopItems = await load<ShopItem[]>('shopItems', [])
       let redemptions = await load<Redemption[]>('redemptions', [])
+      let streakDefs = await load<StreakDef[]>('streakDefs', [])
+      let badgeDefs = await load<BadgeDef[]>('badgeDefs', [])
+      let rankDefs = await load<RankDef[]>('rankDefs', [])
       let settings = normalizeSettings(await load<Settings>('settings', defaultSettings))
       let session = await load<Session | null>('session', null)
 
@@ -455,6 +564,9 @@ export const useStore = create<Store>((set, get) => {
             remotePenaltyRules,
             remoteShopItems,
             remoteRedemptions,
+            remoteStreakDefs,
+            remoteBadgeDefs,
+            remoteRankDefs,
           ] = await Promise.all([
             fetchAll<Task>('sync_tasks'),
             fetchAll<TaskSubmission>('sync_submissions'),
@@ -467,6 +579,9 @@ export const useStore = create<Store>((set, get) => {
             fetchAll<PenaltyRule>('sync_penalty_rules'),
             fetchAll<ShopItem>('sync_shop_items'),
             fetchAll<Redemption>('sync_redemptions'),
+            fetchAll<StreakDef>('sync_streak_defs'),
+            fetchAll<BadgeDef>('sync_badge_defs'),
+            fetchAll<RankDef>('sync_rank_defs'),
           ])
           if (remoteTasks.length > 0) tasks = remoteTasks
           submissions = remoteSubmissions
@@ -478,6 +593,9 @@ export const useStore = create<Store>((set, get) => {
           penaltyRules = remotePenaltyRules
           shopItems = remoteShopItems
           redemptions = remoteRedemptions
+          streakDefs = withDefaults(remoteStreakDefs, DEFAULT_STREAK_DEFS, 'sync_streak_defs')
+          badgeDefs = withDefaults(remoteBadgeDefs, DEFAULT_BADGE_DEFS, 'sync_badge_defs')
+          rankDefs = withDefaults(remoteRankDefs, DEFAULT_RANK_DEFS, 'sync_rank_defs')
           if (remoteSettingsRows.length > 0) {
             settings = normalizeSettings(remoteSettingsRows[0])
           } else {
@@ -495,6 +613,9 @@ export const useStore = create<Store>((set, get) => {
           save('penaltyRules', penaltyRules)
           save('shopItems', shopItems)
           save('redemptions', redemptions)
+          save('streakDefs', streakDefs)
+          save('badgeDefs', badgeDefs)
+          save('rankDefs', rankDefs)
 
           // Cet appareil avait son propre id local pour l'utilisateur connecté :
           // on le fait correspondre au bon compte partagé via son nom.
@@ -506,6 +627,9 @@ export const useStore = create<Store>((set, get) => {
         } else if (users.length === 0) {
           users = await seedUsers()
           tasks = seedTasks(users)
+          streakDefs = DEFAULT_STREAK_DEFS
+          badgeDefs = DEFAULT_BADGE_DEFS
+          rankDefs = DEFAULT_RANK_DEFS
           logs = [
             {
               id: uid(),
@@ -519,12 +643,24 @@ export const useStore = create<Store>((set, get) => {
           save('tasks', tasks)
           save('logs', logs)
           save('settings', settings)
+          save('streakDefs', streakDefs)
+          save('badgeDefs', badgeDefs)
+          save('rankDefs', rankDefs)
           for (const u of users) pushRecord('sync_users', u.id, u)
           for (const t of tasks) pushRecord('sync_tasks', t.id, t)
           for (const l of logs) pushRecord('sync_logs', l.id, l)
+          for (const d of streakDefs) pushRecord('sync_streak_defs', d.id, d)
+          for (const b of badgeDefs) pushRecord('sync_badge_defs', b.id, b)
+          for (const r of rankDefs) pushRecord('sync_rank_defs', r.id, r)
           pushRecord('sync_settings', 'main', settings)
         } else {
           // Appareil déjà utilisé avant l'ajout de la synchro : publie ses données locales.
+          if (streakDefs.length === 0) streakDefs = DEFAULT_STREAK_DEFS
+          if (badgeDefs.length === 0) badgeDefs = DEFAULT_BADGE_DEFS
+          if (rankDefs.length === 0) rankDefs = DEFAULT_RANK_DEFS
+          save('streakDefs', streakDefs)
+          save('badgeDefs', badgeDefs)
+          save('rankDefs', rankDefs)
           for (const u of users) pushRecord('sync_users', u.id, u)
           for (const t of tasks) pushRecord('sync_tasks', t.id, t)
           for (const s of submissions) pushRecord('sync_submissions', s.id, s)
@@ -536,6 +672,9 @@ export const useStore = create<Store>((set, get) => {
           for (const p of penaltyRules) pushRecord('sync_penalty_rules', p.id, p)
           for (const s of shopItems) pushRecord('sync_shop_items', s.id, s)
           for (const r of redemptions) pushRecord('sync_redemptions', r.id, r)
+          for (const d of streakDefs) pushRecord('sync_streak_defs', d.id, d)
+          for (const b of badgeDefs) pushRecord('sync_badge_defs', b.id, b)
+          for (const r of rankDefs) pushRecord('sync_rank_defs', r.id, r)
           pushRecord('sync_settings', 'main', settings)
         }
       } catch (e) {
@@ -543,6 +682,9 @@ export const useStore = create<Store>((set, get) => {
         if (users.length === 0) {
           users = await seedUsers()
           tasks = seedTasks(users)
+          streakDefs = DEFAULT_STREAK_DEFS
+          badgeDefs = DEFAULT_BADGE_DEFS
+          rankDefs = DEFAULT_RANK_DEFS
           logs = [
             {
               id: uid(),
@@ -556,6 +698,13 @@ export const useStore = create<Store>((set, get) => {
           save('tasks', tasks)
           save('logs', logs)
           save('settings', settings)
+          save('streakDefs', streakDefs)
+          save('badgeDefs', badgeDefs)
+          save('rankDefs', rankDefs)
+        } else {
+          if (streakDefs.length === 0) streakDefs = DEFAULT_STREAK_DEFS
+          if (badgeDefs.length === 0) badgeDefs = DEFAULT_BADGE_DEFS
+          if (rankDefs.length === 0) rankDefs = DEFAULT_RANK_DEFS
         }
       }
 
@@ -579,6 +728,9 @@ export const useStore = create<Store>((set, get) => {
         penaltyRules,
         shopItems,
         redemptions,
+        streakDefs,
+        badgeDefs,
+        rankDefs,
         settings,
         session,
       })
@@ -599,6 +751,9 @@ export const useStore = create<Store>((set, get) => {
           remotePenaltyRules,
           remoteShopItems,
           remoteRedemptions,
+          remoteStreakDefs,
+          remoteBadgeDefs,
+          remoteRankDefs,
         ] = await Promise.all([
           fetchAll<User>('sync_users'),
           fetchAll<Task>('sync_tasks'),
@@ -612,9 +767,15 @@ export const useStore = create<Store>((set, get) => {
           fetchAll<PenaltyRule>('sync_penalty_rules'),
           fetchAll<ShopItem>('sync_shop_items'),
           fetchAll<Redemption>('sync_redemptions'),
+          fetchAll<StreakDef>('sync_streak_defs'),
+          fetchAll<BadgeDef>('sync_badge_defs'),
+          fetchAll<RankDef>('sync_rank_defs'),
         ])
         if (remoteUsers.length === 0) return // rien à réconcilier (pas encore de famille distante)
         const settings = remoteSettingsRows.length > 0 ? normalizeSettings(remoteSettingsRows[0]) : get().settings
+        const streakDefs = remoteStreakDefs.length > 0 ? remoteStreakDefs : get().streakDefs
+        const badgeDefs = remoteBadgeDefs.length > 0 ? remoteBadgeDefs : get().badgeDefs
+        const rankDefs = remoteRankDefs.length > 0 ? remoteRankDefs : get().rankDefs
         set({
           users: remoteUsers,
           tasks: remoteTasks,
@@ -628,6 +789,9 @@ export const useStore = create<Store>((set, get) => {
           penaltyRules: remotePenaltyRules,
           shopItems: remoteShopItems,
           redemptions: remoteRedemptions,
+          streakDefs,
+          badgeDefs,
+          rankDefs,
         })
         save('users', remoteUsers)
         save('tasks', remoteTasks)
@@ -641,6 +805,9 @@ export const useStore = create<Store>((set, get) => {
         save('penaltyRules', remotePenaltyRules)
         save('shopItems', remoteShopItems)
         save('redemptions', remoteRedemptions)
+        save('streakDefs', streakDefs)
+        save('badgeDefs', badgeDefs)
+        save('rankDefs', rankDefs)
       } catch (e) {
         console.error('❌ Sync : rafraîchissement distant échoué', e)
       }
@@ -1068,6 +1235,94 @@ export const useStore = create<Store>((set, get) => {
       // Les réglages (dont les fonctionnalités activées) sont partagés en famille,
       // pas seulement sur cet appareil.
       pushRecord('sync_settings', 'main', next)
+    },
+
+    createUser: async (input, actorId) => {
+      const trimmed = input.name.trim()
+      const secretSalt = makeSalt()
+      const secretHash = await hashSecret(input.secret, secretSalt)
+      const user: User = {
+        id: uid(),
+        role: input.role,
+        name: trimmed,
+        secretHash,
+        secretSalt,
+        usesDefaultSecret: true,
+        avatar: input.avatar,
+        color: input.color,
+        createdAt: Date.now(),
+        isActive: true,
+      }
+      set((s) => ({ users: [...s.users, user] }))
+      pushLog('user_created', actorId, `${trimmed} (${input.role === 'child' ? 'enfant' : 'parent'})`, user.id)
+      persist('users')
+      return user
+    },
+
+    saveStreakDef: (input, actorId) => {
+      const { id, ...fields } = input
+      if (id) {
+        set((s) => ({ streakDefs: s.streakDefs.map((d) => (d.id === id ? { ...d, ...fields } : d)) }))
+        pushLog('streak_def_updated', actorId, `« ${fields.label} »`)
+      } else {
+        const def: StreakDef = { ...fields, id: uid(), createdBy: actorId, createdAt: Date.now() }
+        set((s) => ({ streakDefs: [def, ...s.streakDefs] }))
+        pushLog('streak_def_created', actorId, `« ${def.label} »`)
+      }
+      persist('streakDefs')
+    },
+
+    deleteStreakDef: (defId, actorId) => {
+      const def = get().streakDefs.find((d) => d.id === defId)
+      if (!def) return
+      set((s) => ({ streakDefs: s.streakDefs.filter((d) => d.id !== defId) }))
+      pushLog('streak_def_deleted', actorId, `« ${def.label} »`)
+      persist('streakDefs')
+      deleteRecord('sync_streak_defs', defId)
+    },
+
+    saveBadgeDef: (input, actorId) => {
+      const { id, ...fields } = input
+      if (id) {
+        set((s) => ({ badgeDefs: s.badgeDefs.map((b) => (b.id === id ? { ...b, ...fields } : b)) }))
+        pushLog('badge_def_updated', actorId, `« ${fields.label} »`)
+      } else {
+        const def: BadgeDef = { ...fields, id: uid(), createdBy: actorId, createdAt: Date.now() }
+        set((s) => ({ badgeDefs: [def, ...s.badgeDefs] }))
+        pushLog('badge_def_created', actorId, `« ${def.label} »`)
+      }
+      persist('badgeDefs')
+    },
+
+    deleteBadgeDef: (defId, actorId) => {
+      const def = get().badgeDefs.find((b) => b.id === defId)
+      if (!def) return
+      set((s) => ({ badgeDefs: s.badgeDefs.filter((b) => b.id !== defId) }))
+      pushLog('badge_def_deleted', actorId, `« ${def.label} »`)
+      persist('badgeDefs')
+      deleteRecord('sync_badge_defs', defId)
+    },
+
+    saveRankDef: (input, actorId) => {
+      const { id, ...fields } = input
+      if (id) {
+        set((s) => ({ rankDefs: s.rankDefs.map((r) => (r.id === id ? { ...r, ...fields } : r)) }))
+        pushLog('rank_def_updated', actorId, `« ${fields.label} »`)
+      } else {
+        const def: RankDef = { ...fields, id: uid(), createdBy: actorId, createdAt: Date.now() }
+        set((s) => ({ rankDefs: [def, ...s.rankDefs] }))
+        pushLog('rank_def_created', actorId, `« ${def.label} »`)
+      }
+      persist('rankDefs')
+    },
+
+    deleteRankDef: (defId, actorId) => {
+      const def = get().rankDefs.find((r) => r.id === defId)
+      if (!def) return
+      set((s) => ({ rankDefs: s.rankDefs.filter((r) => r.id !== defId) }))
+      pushLog('rank_def_deleted', actorId, `« ${def.label} »`)
+      persist('rankDefs')
+      deleteRecord('sync_rank_defs', defId)
     },
 
     savePenaltyRule: (input, actorId) => {
