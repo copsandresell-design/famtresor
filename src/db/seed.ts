@@ -76,5 +76,17 @@ export const defaultSettings: Settings = {
     savingsGoals: true,
     streaks: true,
     leaderboard: true,
+    shop: true,
+    inactivityPenalties: false,
+    recurringPenalties: true,
+  },
+  pointsPerEuro: 100,
+  inactivityPenalty: {
+    thresholdDays: 1,
+    baseAmountCents: 50,
+    baseAmountPoints: 0,
+    applyMoney: true,
+    applyPoints: false,
+    severityMultiplier: 1,
   },
 }

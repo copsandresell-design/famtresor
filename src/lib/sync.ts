@@ -12,6 +12,12 @@ export type SyncTable =
   | 'sync_transactions'
   | 'sync_savings_goals'
   | 'sync_settings'
+  | 'sync_logs'
+  | 'sync_points_transactions'
+  | 'sync_reward_claims'
+  | 'sync_penalty_rules'
+  | 'sync_shop_items'
+  | 'sync_redemptions'
 
 export async function fetchAll<T>(table: SyncTable): Promise<T[]> {
   const { data, error } = await supabase.from(table).select('id, data')

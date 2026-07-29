@@ -1,20 +1,65 @@
 import { useEffect } from 'react'
 import { subscribeTable, type SyncTable } from '../lib/sync'
 import { useStore } from '../store/useStore'
-import type { SavingsGoal, Settings, Task, TaskSubmission, Transaction, User } from '../types'
+import type {
+  AuditLog,
+  PenaltyRule,
+  PointsTransaction,
+  Redemption,
+  RewardClaim,
+  SavingsGoal,
+  Settings,
+  ShopItem,
+  Task,
+  TaskSubmission,
+  Transaction,
+  User,
+} from '../types'
 
-const TABLES: { table: SyncTable; key: 'users' | 'tasks' | 'submissions' | 'transactions' | 'savingsGoals' }[] = [
+type RemoteEntityKey =
+  | 'users'
+  | 'tasks'
+  | 'submissions'
+  | 'transactions'
+  | 'savingsGoals'
+  | 'logs'
+  | 'pointsTransactions'
+  | 'rewardClaims'
+  | 'penaltyRules'
+  | 'shopItems'
+  | 'redemptions'
+
+type RemoteEntity =
+  | User
+  | Task
+  | TaskSubmission
+  | Transaction
+  | SavingsGoal
+  | AuditLog
+  | PointsTransaction
+  | RewardClaim
+  | PenaltyRule
+  | ShopItem
+  | Redemption
+
+const TABLES: { table: SyncTable; key: RemoteEntityKey }[] = [
   { table: 'sync_users', key: 'users' },
   { table: 'sync_tasks', key: 'tasks' },
   { table: 'sync_submissions', key: 'submissions' },
   { table: 'sync_transactions', key: 'transactions' },
   { table: 'sync_savings_goals', key: 'savingsGoals' },
+  { table: 'sync_logs', key: 'logs' },
+  { table: 'sync_points_transactions', key: 'pointsTransactions' },
+  { table: 'sync_reward_claims', key: 'rewardClaims' },
+  { table: 'sync_penalty_rules', key: 'penaltyRules' },
+  { table: 'sync_shop_items', key: 'shopItems' },
+  { table: 'sync_redemptions', key: 'redemptions' },
 ]
 
 /**
  * À monter une seule fois (App) : garde la famille, les tâches, les soumissions,
- * les transactions, les objectifs d'épargne et les réglages synchronisés en
- * temps réel entre tous les appareils.
+ * les transactions, le journal, les points, les règles de pénalité, la boutique
+ * et les réglages synchronisés en temps réel entre tous les appareils.
  */
 export function useDataRealtime() {
   const receiveUpsert = useStore((s) => s.receiveRemoteUpsert)
@@ -24,7 +69,7 @@ export function useDataRealtime() {
 
   useEffect(() => {
     const unsubs = TABLES.map(({ table, key }) =>
-      subscribeTable<User | Task | TaskSubmission | Transaction | SavingsGoal>(table, (record, eventType) => {
+      subscribeTable<RemoteEntity>(table, (record, eventType) => {
         if (eventType === 'DELETE') receiveDelete(key, (record as { id: string }).id)
         else receiveUpsert(key, record)
       }),

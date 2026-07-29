@@ -6,7 +6,13 @@ export type Difficulty = 'easy' | 'medium' | 'hard'
 export type Frequency = 'daily' | 'twice-weekly' | 'weekly' | 'monthly'
 export type TaskType = 'ponctuelle' | 'recurrente'
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected'
-export type TransactionType = 'task_approval' | 'penalty' | 'penalty_cancel' | 'manual_adjustment'
+export type TransactionType =
+  | 'task_approval'
+  | 'penalty'
+  | 'penalty_cancel'
+  | 'manual_adjustment'
+  | 'approval_reverted'
+  | 'points_conversion'
 export type Theme = 'light' | 'dark' | 'auto'
 
 export interface User {
@@ -89,6 +95,8 @@ export interface AuditLog {
   action: string
   actorId: string
   subjectId?: string
+  /** Id de l'entité concernée (soumission, transaction…) — permet un "annuler" ciblé depuis le Journal. */
+  relatedId?: string
   amount?: number
   details: string
   timestamp: number
@@ -99,6 +107,21 @@ export interface FeatureFlags {
   savingsGoals: boolean
   streaks: boolean
   leaderboard: boolean
+  shop: boolean
+  inactivityPenalties: boolean
+  recurringPenalties: boolean
+}
+
+/** Pénalité automatique appliquée par le cron quotidien quand un enfant est inactif. */
+export interface InactivityPenaltySettings {
+  /** Nombre de jours sans tâche validée avant la première pénalité. */
+  thresholdDays: number
+  baseAmountCents: number
+  baseAmountPoints: number
+  applyMoney: boolean
+  applyPoints: boolean
+  /** Aggravation : montant(jour n) = base × n × severityMultiplier, n = jours au-delà du seuil (1, 2, 3…). */
+  severityMultiplier: number
 }
 
 export interface Settings {
@@ -107,6 +130,9 @@ export interface Settings {
   minBalance: number
   theme: Theme
   features: FeatureFlags
+  /** Taux de conversion points → argent (ex: 100 = 100 points valent 1 €). */
+  pointsPerEuro: number
+  inactivityPenalty: InactivityPenaltySettings
 }
 
 /** Objectif d'épargne fixé par un enfant (ex: un jeu vidéo à 30€). */
@@ -134,6 +160,86 @@ export type NotificationType =
   | 'task_rejected'
   | 'message'
   | 'penalty'
+  | 'reward_earned'
+  | 'wish_submitted'
+  | 'wish_decided'
+  | 'redemption_requested'
+  | 'redemption_fulfilled'
+
+/** Monnaie séparée de l'argent : gagnée via badges/séries, dépensée dans la Boutique. */
+export type PointsTransactionType =
+  | 'badge'
+  | 'streak_bonus'
+  | 'shop_redeem'
+  | 'shop_refund'
+  | 'points_to_money'
+  | 'manual_adjustment'
+
+export interface PointsTransaction {
+  id: string
+  childId: string
+  type: PointsTransactionType
+  /** Positif = gain, négatif = dépense. */
+  amount: number
+  description: string
+  relatedTo?: string
+  createdBy: string
+  createdAt: number
+}
+
+/** Marqueur d'idempotence : empêche de recréditer deux fois le même badge/palier de série. */
+export interface RewardClaim {
+  id: string
+  childId: string
+  /** ex: 'badge:demarrage' ou 'streak:7' */
+  key: string
+  createdAt: number
+}
+
+/** Règle de pénalité récurrente créée par un parent (ex : chambre pas rangée le dimanche soir). */
+export interface PenaltyRule {
+  id: string
+  childId: string
+  title: string
+  amount: number
+  /** Fréquences pertinentes pour une règle sans historique de soumissions : quotidienne, hebdo ou mensuelle. */
+  recurrence: Recurrence
+  active: boolean
+  createdBy: string
+  createdAt: number
+}
+
+export type ShopCategory = 'cinema' | 'resto' | 'jeu_video' | 'sortie' | 'ecran' | 'cadeau'
+export type ShopItemStatus = 'proposed' | 'active' | 'archived'
+
+/** Lot de la boutique (catalogue parent) ou vœu proposé par un enfant (status 'proposed', coût absent). */
+export interface ShopItem {
+  id: string
+  title: string
+  icon: string
+  category: ShopCategory
+  cost?: number
+  status: ShopItemStatus
+  proposedBy?: string
+  createdBy: string
+  createdAt: number
+}
+
+export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled'
+
+/** Échange de points contre un lot — historique conservé même si le lot du catalogue change ensuite. */
+export interface Redemption {
+  id: string
+  childId: string
+  itemId: string
+  title: string
+  icon: string
+  cost: number
+  status: RedemptionStatus
+  requestedAt: number
+  fulfilledAt?: number
+  fulfilledBy?: string
+}
 
 export interface AppNotification {
   id: string
