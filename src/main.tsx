@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import { setNeedRefresh } from './lib/pwaUpdate'
+import { checkForNewVersion } from './lib/versionCheck'
 
 // PWA : sans ça, une app installée sur mobile peut rester bloquée indéfiniment sur une
 // vieille version tant qu'on ne la désinstalle pas — le navigateur ne revérifie les mises
@@ -38,6 +39,11 @@ if ('serviceWorker' in navigator) {
     },
   })
 }
+
+// Filet de secours indépendant du service worker (voir lib/versionCheck.ts) : nécessaire
+// notamment sur iOS, où un SW "waiting" peut ne jamais s'activer tout seul en arrière-plan.
+// Fire-and-forget : ne doit jamais retarder l'affichage initial.
+void checkForNewVersion()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
