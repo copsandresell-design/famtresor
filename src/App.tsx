@@ -17,6 +17,8 @@ import { ChildrenPage } from './pages/parent/ChildrenPage'
 import { LogsPage } from './pages/parent/LogsPage'
 import { OverviewPage } from './pages/parent/OverviewPage'
 import { PenaltiesPage } from './pages/parent/PenaltiesPage'
+import { ShopPage } from './pages/parent/ShopPage'
+import { ChildShopPage } from './pages/child/ChildShopPage'
 import { SettingsPage } from './pages/parent/SettingsPage'
 import { TasksPage } from './pages/parent/TasksPage'
 import { useStore } from './store/useStore'
@@ -56,6 +58,7 @@ export default function App() {
   const ready = useStore((s) => s.ready)
   const session = useStore((s) => s.session)
   const init = useStore((s) => s.init)
+  const shopEnabled = useStore((s) => s.settings.features.shop)
   useTheme()
   useSessionExpiry()
   useNotificationRealtime()
@@ -88,6 +91,7 @@ export default function App() {
                 <Route path="taches" element={<TasksPage />} />
                 <Route path="validations" element={<ApprovalsPage />} />
                 <Route path="penalites" element={<PenaltiesPage />} />
+                {shopEnabled && <Route path="boutique" element={<ShopPage />} />}
                 <Route
                   path="stats"
                   element={
@@ -110,6 +114,7 @@ export default function App() {
                 <Route index element={<ChildHomePage />} />
                 <Route path="historique" element={<ChildHistoryPage />} />
                 <Route path="profil" element={<ChildProfilePage />} />
+                {shopEnabled && <Route path="boutique" element={<ChildShopPage />} />}
               </Route>
               <Route path="*" element={<Navigate to="/enfant" replace />} />
             </>

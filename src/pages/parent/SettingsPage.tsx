@@ -28,6 +28,13 @@ const FEATURE_LABELS: { key: keyof FeatureFlags; emoji: string; label: string; d
     label: 'Classement',
     description: "Classement des enfants par gains du mois, visible sur ta vue d'ensemble.",
   },
+  {
+    key: 'shop',
+    emoji: '🎁',
+    label: 'Boutique à points',
+    description:
+      'Les enfants gagnent des points (badges, séries) et les échangent contre des lots que tu définis, ou les convertissent en argent.',
+  },
 ]
 
 export function SettingsPage() {

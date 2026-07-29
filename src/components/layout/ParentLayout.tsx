@@ -4,6 +4,7 @@ import {
   BarChart3,
   BellRing,
   CalendarDays,
+  Gift,
   Home,
   ListTodo,
   LogOut,
@@ -21,7 +22,7 @@ import { NotificationCenter } from '../NotificationCenter'
 import { AvatarEditorModal } from '../ui/AvatarEditorModal'
 import { ChildAvatar } from '../ui/ChildAvatar'
 
-const links = [
+const BASE_LINKS = [
   { to: '/parent', label: 'Accueil', icon: Home, end: true },
   { to: '/parent/taches', label: 'Tâches', icon: ListTodo },
   { to: '/parent/validations', label: 'Validations', icon: BellRing, badge: true },
@@ -33,7 +34,7 @@ const links = [
   { to: '/parent/reglages', label: 'Réglages', icon: Settings },
 ]
 
-const mobileLinks = links.slice(0, 4)
+const SHOP_LINK = { to: '/parent/boutique', label: 'Boutique', icon: Gift, end: false, badge: false }
 
 function PendingBadge() {
   const count = useStore((s) => s.submissions.filter((x) => x.status === 'pending').length)
@@ -53,6 +54,11 @@ export function ParentLayout() {
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingAvatar, setEditingAvatar] = useState(false)
+
+  const links = settings.features.shop
+    ? [...BASE_LINKS.slice(0, 4), SHOP_LINK, ...BASE_LINKS.slice(4)]
+    : BASE_LINKS
+  const mobileLinks = links.slice(0, 4)
 
   useEffect(() => {
     touchSession()

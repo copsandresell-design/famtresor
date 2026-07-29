@@ -15,6 +15,7 @@ import { Modal } from '../../components/ui/Modal'
 import { db } from '../../db/storage'
 import { computeBadges, type BadgeState } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
+import { computePoints } from '../../lib/points'
 import { computeLevel } from '../../lib/levels'
 import { DIFFICULTIES } from '../../lib/categories'
 import { celebrate } from '../../lib/confetti'
@@ -69,6 +70,7 @@ export function ChildHomePage() {
   const submissions = useStore((s) => s.submissions)
   const transactions = useStore((s) => s.transactions)
   const savingsGoals = useStore((s) => s.savingsGoals)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const messages = useStore((s) => s.messages)
   const settings = useStore((s) => s.settings)
   const submitTask = useStore((s) => s.submitTask)
@@ -159,6 +161,7 @@ export function ChildHomePage() {
   if (!user || !childId || !streak || !level) return null
 
   const balance = computeBalance(transactions, childId)
+  const points = computePoints(pointsTransactions, childId)
   const pending = submissions.filter((s) => s.childId === childId && s.status === 'pending')
   const recent = transactions.filter((t) => t.childId === childId).slice(0, 5)
   const myGoals = savingsGoals.filter((g) => g.childId === childId)
@@ -206,6 +209,15 @@ export function ChildHomePage() {
               <Flame size={16} aria-hidden />
               {streak.count} jour{streak.count > 1 ? 's' : ''}
             </p>
+          )}
+          {settings.features.shop && (
+            <Link
+              to="/enfant/boutique"
+              className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold"
+            >
+              <Sparkles size={15} aria-hidden />
+              {points} pts
+            </Link>
           )}
         </div>
 
