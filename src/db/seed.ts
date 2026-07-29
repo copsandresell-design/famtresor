@@ -153,4 +153,12 @@ export const defaultSettings: Settings = {
     applyPoints: false,
     severityMultiplier: 1,
   },
+  weeklyPointsCap: {
+    enabled: false,
+    amount: 500,
+  },
+  dailyReminder: {
+    enabled: false,
+    hour: 18,
+  },
 }

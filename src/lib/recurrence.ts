@@ -27,6 +27,28 @@ export function timesSubmittedToday(
 }
 
 /**
+ * Combien de validations (approuvées) de cette même tâche existent déjà le même jour, avant
+ * `submission` — sert de base au rendement dégressif des tâches répétables (voir
+ * computeTaskPoints dans lib/points.ts). 0 pour la première validation du jour.
+ */
+export function approvedOccurrenceIndexToday(
+  taskId: string,
+  childId: string,
+  submission: TaskSubmission,
+  submissions: TaskSubmission[],
+): number {
+  return submissions.filter(
+    (s) =>
+      s.taskId === taskId &&
+      s.childId === childId &&
+      s.status === 'approved' &&
+      s.id !== submission.id &&
+      isSameDay(s.submittedAt, submission.submittedAt) &&
+      s.submittedAt < submission.submittedAt,
+  ).length
+}
+
+/**
  * Une tâche est disponible si l'enfant peut la signaler maintenant :
  * - ponctuelle : jamais signalée (hors refus, qui redonne sa chance)
  * - quotidienne : moins de `dailyLimit` fois aujourd'hui (défaut 1)

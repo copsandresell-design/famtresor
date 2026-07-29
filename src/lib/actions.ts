@@ -34,6 +34,22 @@ export const ACTION_LABELS: Record<string, string> = {
   redemption_fulfilled: 'Échange remis',
   redemption_cancelled: 'Échange annulé',
   points_converted: 'Points convertis en argent',
+  user_created: 'Profil créé',
+  streak_def_created: 'Série créée',
+  streak_def_updated: 'Série modifiée',
+  streak_def_deleted: 'Série supprimée',
+  badge_def_created: 'Badge créé',
+  badge_def_updated: 'Badge modifié',
+  badge_def_deleted: 'Badge supprimé',
+  rank_def_created: 'Rang créé',
+  rank_def_updated: 'Rang modifié',
+  rank_def_deleted: 'Rang supprimé',
+  savings_goal_created: "Objectif d'épargne créé",
+  savings_goal_deleted: "Objectif d'épargne supprimé",
+  shop_item_updated: 'Lot de la boutique modifié',
+  submission_deleted: 'Validation supprimée définitivement',
+  custom_notification_sent: 'Notification envoyée',
+  daily_reminder_sent: 'Rappel quotidien envoyé',
 }
 
 export function actionLabel(action: string): string {
