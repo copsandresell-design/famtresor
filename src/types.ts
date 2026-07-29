@@ -198,8 +198,87 @@ export interface PointsTransaction {
 export interface RewardClaim {
   id: string
   childId: string
-  /** ex: 'badge:demarrage' ou 'streak:7' */
+  /** ex: 'badge:demarrage' ou 'streak:global:7' */
   key: string
+  createdAt: number
+}
+
+export type StreakKind = 'global' | 'no_penalty' | 'task'
+
+export interface StreakTier {
+  days: number
+  points: number
+}
+
+/**
+ * Définition administrable d'une série (Réglages → Séries) : le "genre" de série (globale,
+ * sans pénalité, liée à une tâche précise) reste un ensemble fixe de mécanismes calculables
+ * dans le code (voir src/lib/streak.ts), mais quelles séries existent, leurs paliers et leurs
+ * bonus sont des données modifiables sans redéploiement.
+ */
+export interface StreakDef {
+  id: string
+  kind: StreakKind
+  label: string
+  emoji: string
+  /** Requis si kind === 'task' : la tâche dont on compte les jours consécutifs de validation. */
+  taskId?: string
+  tiers: StreakTier[]
+  isActive: boolean
+  createdBy: string
+  createdAt: number
+}
+
+/**
+ * Genre de badge : mécanisme de calcul fixe (voir src/lib/badges.ts). Le catalogue d'instances
+ * (BadgeDef) — quels badges existent, leurs seuils, libellés, points — est administrable.
+ */
+export type BadgeKind =
+  | 'lifetime_tasks'
+  | 'category_specialist'
+  | 'streak_tier'
+  | 'fast_approval'
+  | 'initiative'
+  | 'best_week'
+  | 'perfectionist'
+  | 'family_points'
+  | 'month_mvp'
+  | 'lifetime_points'
+  | 'savings_goal'
+  | 'shop_first_exchange'
+  | 'zero_penalty'
+  | 'family_complete'
+
+export interface BadgeDefParams {
+  threshold?: number
+  category?: Category
+  streakDefId?: string
+  days?: number
+  hours?: number
+}
+
+export interface BadgeDef {
+  id: string
+  kind: BadgeKind
+  label: string
+  emoji: string
+  description: string
+  points: number
+  params: BadgeDefParams
+  isActive: boolean
+  createdBy: string
+  createdAt: number
+}
+
+/** Palier de la progression à vie (jamais dégressive, indépendante du solde de points dépensable). */
+export interface RankDef {
+  id: string
+  label: string
+  emoji: string
+  color: string
+  /** Points cumulés à vie requis pour atteindre ce rang. */
+  threshold: number
+  createdBy: string
   createdAt: number
 }
 
