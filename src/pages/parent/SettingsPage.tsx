@@ -3,14 +3,69 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
-import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { Field, inputCls } from '../../components/ui/Field'
+import { Modal } from '../../components/ui/Modal'
 import { PushNotificationsCard } from '../../components/ui/PushNotificationsCard'
 import { Switch } from '../../components/ui/Switch'
 import { cn } from '../../lib/cn'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { FeatureFlags, Theme } from '../../types'
+
+const SEASON_RESET_WORD = 'RÉINITIALISER'
+
+/** Double confirmation renforcée : taper un mot plutôt qu'un simple Oui/Non, vu l'ampleur et l'irréversibilité. */
+function SeasonResetModal({ onClose }: { onClose: () => void }) {
+  const user = useCurrentUser()
+  const resetSeason = useStore((s) => s.resetSeason)
+  const toast = useStore((s) => s.toast)
+  const [confirmText, setConfirmText] = useState('')
+
+  if (!user) return null
+  const valid = confirmText.trim().toUpperCase() === SEASON_RESET_WORD
+
+  return (
+    <Modal open onClose={onClose} title="Réinitialiser la saison">
+      <div className="space-y-4">
+        <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">
+          Action irréversible, pour tous les enfants : solde argent, points (dépensables et à vie —
+          les rangs retombent à Débutant), badges (tous reverrouillés), séries (remises à 0 jour),
+          objectifs d'épargne, historique des tâches/transactions/pénalités et stock de la boutique
+          seront remis à zéro.
+        </p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Les comptes, les tâches, les catalogues (badges, séries, rangs, boutique) et les réglages
+          restent inchangés.
+        </p>
+        <Field label={`Tape ${SEASON_RESET_WORD} pour confirmer`}>
+          <input
+            className={inputCls}
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder={SEASON_RESET_WORD}
+            autoFocus
+          />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button variant="soft" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button
+            variant="danger"
+            disabled={!valid}
+            onClick={() => {
+              resetSeason(user!.id)
+              toast('Saison réinitialisée.')
+              onClose()
+            }}
+          >
+            Oui, tout réinitialiser
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 const GAMIFICATION_LINKS = [
   { to: '/parent/reglages/badges', icon: Medal, label: 'Badges', description: 'Catalogue, seuils et points de chaque badge.' },
@@ -147,14 +202,13 @@ export function SettingsPage() {
   const settings = useStore((s) => s.settings)
   const updateSettings = useStore((s) => s.updateSettings)
   const changeSecret = useStore((s) => s.changeSecret)
-  const resetAllBalances = useStore((s) => s.resetAllBalances)
   const toast = useStore((s) => s.toast)
 
   const [familyName, setFamilyName] = useState(settings.familyName)
   const [bonus, setBonus] = useState(String(settings.initiativeBonus))
   const [minBalance, setMinBalance] = useState(centsToEuroInput(settings.minBalance))
   const [password, setPassword] = useState('')
-  const [confirmReset, setConfirmReset] = useState(false)
+  const [resettingSeason, setResettingSeason] = useState(false)
   const [pointsPerEuro, setPointsPerEuro] = useState(String(settings.pointsPerEuro))
   const [thresholdDays, setThresholdDays] = useState(String(settings.inactivityPenalty.thresholdDays))
   const [baseAmount, setBaseAmount] = useState(centsToEuroInput(settings.inactivityPenalty.baseAmountCents))
@@ -601,27 +655,19 @@ export function SettingsPage() {
       <Card className="space-y-3 border-rose-200 p-5 dark:border-rose-900">
         <h2 className="font-bold text-rose-600 dark:text-rose-400">Zone sensible</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          Remet le solde de tous les enfants à zéro. Chaque ajustement reste tracé dans le journal.
+          Réinitialiser la saison remet à zéro, pour tous les enfants : solde argent, points
+          (dépensables et à vie), badges, séries, objectifs d'épargne, historique des
+          tâches/transactions/pénalités, et le stock de la boutique. Les comptes, les tâches et les
+          catalogues ne sont pas touchés. Une trace minimale reste dans le journal.
         </p>
         <div className="flex justify-end">
-          <Button variant="danger" onClick={() => setConfirmReset(true)}>
-            Réinitialiser tous les soldes
+          <Button variant="danger" onClick={() => setResettingSeason(true)}>
+            Réinitialiser la saison
           </Button>
         </div>
       </Card>
 
-      <ConfirmModal
-        open={confirmReset}
-        onClose={() => setConfirmReset(false)}
-        title="Réinitialiser tous les soldes"
-        message="Tous les soldes seront remis à zéro. Cette action est tracée mais irréversible. Continuer ?"
-        confirmLabel="Oui, tout remettre à zéro"
-        danger
-        onConfirm={() => {
-          resetAllBalances(user.id)
-          toast('Tous les soldes ont été remis à zéro.')
-        }}
-      />
+      {resettingSeason && <SeasonResetModal onClose={() => setResettingSeason(false)} />}
     </div>
   )
 }
