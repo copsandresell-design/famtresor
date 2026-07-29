@@ -1,4 +1,4 @@
-import { Download, Undo2 } from 'lucide-react'
+import { Download, Trash2, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Amount } from '../../components/ui/Amount'
 import { Button } from '../../components/ui/Button'
@@ -42,6 +42,8 @@ export function LogsPage() {
   const transactions = useStore((s) => s.transactions)
   const revertApproval = useStore((s) => s.revertApproval)
   const deletePenaltyTransaction = useStore((s) => s.deletePenaltyTransaction)
+  const deleteSubmission = useStore((s) => s.deleteSubmission)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const toast = useStore((s) => s.toast)
 
   const [childFilter, setChildFilter] = useState('all')
@@ -51,6 +53,7 @@ export function LogsPage() {
   const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
   const [undoing, setUndoing] = useState<AuditLog | null>(null)
+  const [deleting, setDeleting] = useState<AuditLog | null>(null)
 
   const children = users.filter((u) => u.role === 'child')
   const parents = users.filter((u) => u.role === 'parent')
@@ -171,10 +174,18 @@ export function LogsPage() {
                   <td className="max-w-64 truncate px-4 py-2.5 text-slate-600 dark:text-slate-300">{log.details}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
                     {undoTarget && (
-                      <Button variant="ghost" size="sm" onClick={() => setUndoing(log)}>
-                        <Undo2 size={14} />
-                        Annuler
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setUndoing(log)}>
+                          <Undo2 size={14} />
+                          Annuler
+                        </Button>
+                        {undoTarget === 'approval' && (
+                          <Button variant="ghost" size="sm" className="text-rose-500" onClick={() => setDeleting(log)}>
+                            <Trash2 size={14} />
+                            Supprimer
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -207,6 +218,24 @@ export function LogsPage() {
             deletePenaltyTransaction(undoing.relatedId, user.id)
             toast('Pénalité annulée.')
           }
+        }}
+      />
+
+      <ConfirmModal
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        title="Supprimer définitivement cette validation ?"
+        message={`Cette action est irréversible : « ${deleting?.details ?? ''} » disparaîtra complètement de l'historique de ${nameOf(
+          deleting?.subjectId,
+        )}, et ${
+          pointsTransactions.find((p) => p.relatedTo === deleting?.relatedId && p.type === 'task_approval')?.amount ?? 0
+        } points déjà crédités lui seront retirés.`}
+        confirmLabel="Oui, supprimer définitivement"
+        danger
+        onConfirm={() => {
+          if (!deleting || !user || !deleting.relatedId) return
+          deleteSubmission(deleting.relatedId, user.id)
+          toast('Validation supprimée définitivement.')
         }}
       />
     </div>

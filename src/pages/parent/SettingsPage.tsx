@@ -7,6 +7,7 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { Field, inputCls } from '../../components/ui/Field'
 import { PushNotificationsCard } from '../../components/ui/PushNotificationsCard'
 import { Switch } from '../../components/ui/Switch'
+import { cn } from '../../lib/cn'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { FeatureFlags, Theme } from '../../types'
@@ -16,6 +17,102 @@ const GAMIFICATION_LINKS = [
   { to: '/parent/reglages/series', icon: Sparkles, label: 'Séries', description: 'Séries globale, sans pénalité, ou liées à une tâche.' },
   { to: '/parent/reglages/rangs', icon: Trophy, label: 'Rangs', description: 'Échelle de progression à vie et ses seuils.' },
 ]
+
+const QUICK_TEMPLATES = [
+  'Nouvelle tâche ajoutée !',
+  "Mise à jour de l'app disponible, réinstalle si besoin.",
+  "Attention, une pénalité arrive si rien n'est fait aujourd'hui.",
+]
+
+/** Envoi immédiat d'une vraie notification push à un ou plusieurs enfants, avec quelques modèles rapides. */
+function SendNotificationCard() {
+  const user = useCurrentUser()
+  const children = useStore((s) => s.users).filter((u) => u.role === 'child' && u.isActive)
+  const sendCustomNotification = useStore((s) => s.sendCustomNotification)
+  const toast = useStore((s) => s.toast)
+  const [selected, setSelected] = useState<string[]>([])
+  const [text, setText] = useState('')
+
+  if (!user) return null
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  function send() {
+    if (!text.trim() || selected.length === 0) return
+    sendCustomNotification(selected, text, user!.id)
+    toast(`Notification envoyée à ${selected.length} enfant${selected.length > 1 ? 's' : ''}.`)
+    setText('')
+    setSelected([])
+  }
+
+  const allSelected = children.length > 0 && selected.length === children.length
+
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h2 className="font-bold">Envoyer une notification</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Notification push immédiate à un ou plusieurs enfants, même si l'app est fermée sur leur téléphone.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setSelected(allSelected ? [] : children.map((c) => c.id))}
+          className={cn(
+            'rounded-full border px-3 py-1.5 text-sm font-semibold cursor-pointer',
+            allSelected
+              ? 'border-amber-500 bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300'
+              : 'border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
+          )}
+        >
+          Tous les enfants
+        </button>
+        {children.map((child) => (
+          <button
+            key={child.id}
+            type="button"
+            onClick={() => toggle(child.id)}
+            className={cn(
+              'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold cursor-pointer',
+              selected.includes(child.id)
+                ? 'border-amber-500 bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
+            )}
+          >
+            {child.avatar} {child.name}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {QUICK_TEMPLATES.map((tpl) => (
+          <button
+            key={tpl}
+            type="button"
+            onClick={() => setText(tpl)}
+            className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 cursor-pointer"
+          >
+            {tpl}
+          </button>
+        ))}
+      </div>
+      <textarea
+        className={inputCls}
+        rows={2}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Ton message…"
+      />
+      <div className="flex justify-end">
+        <Button disabled={!text.trim() || selected.length === 0} onClick={send}>
+          Envoyer
+        </Button>
+      </div>
+    </Card>
+  )
+}
 
 const FEATURE_LABELS: { key: keyof FeatureFlags; emoji: string; label: string; description: string }[] = [
   {
@@ -63,6 +160,8 @@ export function SettingsPage() {
   const [baseAmount, setBaseAmount] = useState(centsToEuroInput(settings.inactivityPenalty.baseAmountCents))
   const [baseAmountPoints, setBaseAmountPoints] = useState(String(settings.inactivityPenalty.baseAmountPoints))
   const [severityMultiplier, setSeverityMultiplier] = useState(String(settings.inactivityPenalty.severityMultiplier))
+  const [weeklyCapAmount, setWeeklyCapAmount] = useState(String(settings.weeklyPointsCap.amount))
+  const [reminderHour, setReminderHour] = useState(String(settings.dailyReminder.hour))
 
   if (!user) return null
 
@@ -97,6 +196,22 @@ export function SettingsPage() {
       user!.id,
     )
     toast('Réglages des pénalités automatiques enregistrés.')
+  }
+
+  function saveWeeklyCapSettings() {
+    updateSettings(
+      { weeklyPointsCap: { ...settings.weeklyPointsCap, amount: Math.max(1, parseInt(weeklyCapAmount, 10) || 1) } },
+      user!.id,
+    )
+    toast('Plafond hebdomadaire enregistré.')
+  }
+
+  function saveDailyReminderSettings() {
+    updateSettings(
+      { dailyReminder: { ...settings.dailyReminder, hour: Math.min(23, Math.max(0, parseInt(reminderHour, 10) || 0)) } },
+      user!.id,
+    )
+    toast('Heure du rappel enregistrée.')
   }
 
   async function savePassword() {
@@ -238,6 +353,47 @@ export function SettingsPage() {
 
         <div className="flex items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
           <span className="text-xl" aria-hidden>
+            🛡️
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Plafond hebdomadaire de points</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Filet de sécurité optionnel : au-delà de ce total de points gagnés dans la semaine, un
+              enfant n'en gagne plus jusqu'à la semaine suivante (badges et séries compris).
+            </p>
+          </div>
+          <Switch
+            checked={settings.weeklyPointsCap.enabled}
+            onChange={(checked) =>
+              updateSettings({ weeklyPointsCap: { ...settings.weeklyPointsCap, enabled: checked } }, user.id)
+            }
+            label="Plafond hebdomadaire"
+          />
+        </div>
+
+        {settings.weeklyPointsCap.enabled && (
+          <div className="space-y-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+            <Field label="Plafond (points par semaine et par enfant)">
+              <input
+                className={inputCls}
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                value={weeklyCapAmount}
+                onChange={(e) => setWeeklyCapAmount(e.target.value)}
+              />
+            </Field>
+            <div className="flex justify-end">
+              <Button variant="soft" onClick={saveWeeklyCapSettings}>
+                Enregistrer
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <span className="text-xl" aria-hidden>
             😴
           </span>
           <div className="min-w-0 flex-1">
@@ -369,6 +525,55 @@ export function SettingsPage() {
           ))}
         </div>
       </Card>
+
+      <Card className="space-y-4 p-5">
+        <div className="flex items-center gap-3">
+          <span className="text-xl" aria-hidden>
+            ⏰
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold">Rappel quotidien</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Notifie automatiquement chaque enfant qui n'a encore rien signalé de la journée.
+            </p>
+          </div>
+          <Switch
+            checked={settings.dailyReminder.enabled}
+            onChange={(checked) =>
+              updateSettings({ dailyReminder: { ...settings.dailyReminder, enabled: checked } }, user.id)
+            }
+            label="Rappel quotidien"
+          />
+        </div>
+        {settings.dailyReminder.enabled && (
+          <div className="space-y-3 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+            <Field label="Heure du rappel">
+              <input
+                className={inputCls}
+                type="number"
+                min="0"
+                max="23"
+                step="1"
+                inputMode="numeric"
+                value={reminderHour}
+                onChange={(e) => setReminderHour(e.target.value)}
+              />
+            </Field>
+            <p className="text-xs text-slate-400">
+              Sur l'offre gratuite de l'hébergeur, la vérification n'a lieu qu'une fois par jour, vers
+              18h-19h (heure de Paris) : une heure réglée avant ce moment se déclenche le jour même : une
+              heure réglée plus tard peut ne partir que le lendemain.
+            </p>
+            <div className="flex justify-end">
+              <Button variant="soft" onClick={saveDailyReminderSettings}>
+                Enregistrer
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <SendNotificationCard />
 
       <PushNotificationsCard userId={user.id} />
 

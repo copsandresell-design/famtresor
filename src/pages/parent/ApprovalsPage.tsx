@@ -1,5 +1,5 @@
 import { AnimatePresence } from 'framer-motion'
-import { Check, Undo2, X } from 'lucide-react'
+import { Check, Trash2, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { PhotoLightbox } from '../../components/photos/PhotoLightbox'
 import { PhotoThumb } from '../../components/photos/PhotoThumb'
@@ -7,6 +7,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ChildAvatar } from '../../components/ui/ChildAvatar'
+import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
@@ -80,9 +81,11 @@ export function ApprovalsPage() {
   const tasks = useStore((s) => s.tasks)
   const users = useStore((s) => s.users)
   const settings = useStore((s) => s.settings)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const approve = useStore((s) => s.approveSubmission)
   const reject = useStore((s) => s.rejectSubmission)
   const revertApproval = useStore((s) => s.revertApproval)
+  const deleteSubmission = useStore((s) => s.deleteSubmission)
   const toast = useStore((s) => s.toast)
 
   const [tab, setTab] = useState<SubmissionStatus>('pending')
@@ -91,6 +94,7 @@ export function ApprovalsPage() {
   const [messaging, setMessaging] = useState<User | null>(null)
   const [lightbox, setLightbox] = useState<{ ids: string[]; index: number } | null>(null)
   const [reverting, setReverting] = useState<TaskSubmission | null>(null)
+  const [deleting, setDeleting] = useState<TaskSubmission | null>(null)
 
   if (!user) return null
 
@@ -205,10 +209,14 @@ export function ApprovalsPage() {
               )}
 
               {sub.status === 'approved' && (
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex flex-wrap justify-end gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setReverting(sub)}>
                     <Undo2 size={16} />
                     Annuler cette validation
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-rose-500" onClick={() => setDeleting(sub)}>
+                    <Trash2 size={16} />
+                    Supprimer définitivement
                   </Button>
                 </div>
               )}
@@ -293,6 +301,27 @@ export function ApprovalsPage() {
           </Button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        title="Supprimer définitivement cette validation ?"
+        message={`Cette action est irréversible : « ${
+          deleting ? findTask(deleting)?.title ?? 'tâche' : ''
+        } » disparaîtra complètement de l'historique de ${
+          deleting ? findChild(deleting)?.name ?? "l'enfant" : ''
+        }, et ${
+          pointsTransactions.find((p) => p.relatedTo === deleting?.id && p.type === 'task_approval')?.amount ?? 0
+        } points déjà crédités lui seront retirés.`}
+        confirmLabel="Oui, supprimer définitivement"
+        danger
+        onConfirm={() => {
+          if (deleting && user) {
+            deleteSubmission(deleting.id, user.id)
+            toast('Validation supprimée définitivement.')
+          }
+        }}
+      />
 
       {messaging && <MessageModal child={messaging} onClose={() => setMessaging(null)} />}
 
