@@ -3,13 +3,16 @@ import { subscribeTable, type SyncTable } from '../lib/sync'
 import { useStore } from '../store/useStore'
 import type {
   AuditLog,
+  BadgeDef,
   PenaltyRule,
   PointsTransaction,
+  RankDef,
   Redemption,
   RewardClaim,
   SavingsGoal,
   Settings,
   ShopItem,
+  StreakDef,
   Task,
   TaskSubmission,
   Transaction,
@@ -28,6 +31,9 @@ type RemoteEntityKey =
   | 'penaltyRules'
   | 'shopItems'
   | 'redemptions'
+  | 'streakDefs'
+  | 'badgeDefs'
+  | 'rankDefs'
 
 type RemoteEntity =
   | User
@@ -41,6 +47,9 @@ type RemoteEntity =
   | PenaltyRule
   | ShopItem
   | Redemption
+  | StreakDef
+  | BadgeDef
+  | RankDef
 
 const TABLES: { table: SyncTable; key: RemoteEntityKey }[] = [
   { table: 'sync_users', key: 'users' },
@@ -54,6 +63,9 @@ const TABLES: { table: SyncTable; key: RemoteEntityKey }[] = [
   { table: 'sync_penalty_rules', key: 'penaltyRules' },
   { table: 'sync_shop_items', key: 'shopItems' },
   { table: 'sync_redemptions', key: 'redemptions' },
+  { table: 'sync_streak_defs', key: 'streakDefs' },
+  { table: 'sync_badge_defs', key: 'badgeDefs' },
+  { table: 'sync_rank_defs', key: 'rankDefs' },
 ]
 
 /**
