@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Flame, Hourglass, Sparkles, Wallet } from 'lucide-react'
+import { Flame, Hourglass, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PhotoPicker, type PickedPhoto } from '../../components/photos/PhotoPicker'
@@ -311,12 +311,6 @@ export function ChildHomePage() {
             <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
               <Flame size={16} aria-hidden />
               {streak.count} jour{streak.count > 1 ? 's' : ''}
-            </p>
-          )}
-          {balance !== 0 && (
-            <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
-              <Wallet size={15} aria-hidden />
-              {formatEuro(balance)}
             </p>
           )}
         </div>
