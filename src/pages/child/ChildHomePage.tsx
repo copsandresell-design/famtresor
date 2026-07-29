@@ -18,7 +18,8 @@ import { computeBalance } from '../../lib/balance'
 import { computePoints } from '../../lib/points'
 import { computeLevel } from '../../lib/levels'
 import { DIFFICULTIES } from '../../lib/categories'
-import { celebrate } from '../../lib/confetti'
+import { celebrateFireworks } from '../../lib/confetti'
+import { playCelebrationSound } from '../../lib/sound'
 import { childGradient, gradientEnd } from '../../lib/colors'
 import { formatEuro, formatRelative } from '../../lib/format'
 import { isTaskAvailable } from '../../lib/recurrence'
@@ -95,8 +96,9 @@ export function ChildHomePage() {
         (s) => s.childId === childId && s.status === 'approved' && (s.reviewedAt ?? 0) > lastSeen,
       )
       if (fresh.length > 0) {
-        celebrate([user!.color, gradientEnd(user!.color)])
-        toast(`${fresh.length > 1 ? `${fresh.length} tâches validées` : 'Tâche validée'} pendant ton absence ! 🎉`)
+        celebrateFireworks([user!.color, gradientEnd(user!.color)])
+        playCelebrationSound()
+        toast(`${fresh.length > 1 ? `${fresh.length} tâches validées` : 'Tâche validée'} ! 🎉`)
       }
       await db.setItem(key, Date.now())
     })()
@@ -129,7 +131,8 @@ export function ChildHomePage() {
       if (seen !== null) {
         const fresh = unlocked.find((b) => !seen.includes(b.id))
         if (fresh) {
-          celebrate([user!.color, gradientEnd(user!.color)])
+          celebrateFireworks([user!.color, gradientEnd(user!.color)])
+          playCelebrationSound()
           setUnlockedBadge(fresh)
         }
       }

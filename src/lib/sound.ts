@@ -27,3 +27,28 @@ export function playNotificationSound(kind: SoundKind = 'default'): void {
     // Web Audio indisponible : on reste silencieux.
   }
 }
+
+/** Petit arpège ascendant pour les moments forts (tâche validée en direct, badge débloqué). */
+export function playCelebrationSound(): void {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext
+    const ctx = new Ctx()
+    const notes = [523.25, 659.25, 783.99, 1046.5] // Do, Mi, Sol, Do (octave au-dessus)
+    notes.forEach((freq, i) => {
+      const start = ctx.currentTime + i * 0.09
+      const oscillator = ctx.createOscillator()
+      const gainNode = ctx.createGain()
+      oscillator.type = 'triangle'
+      oscillator.connect(gainNode)
+      gainNode.connect(ctx.destination)
+      oscillator.frequency.value = freq
+      gainNode.gain.setValueAtTime(0.001, start)
+      gainNode.gain.exponentialRampToValueAtTime(0.25, start + 0.02)
+      gainNode.gain.exponentialRampToValueAtTime(0.001, start + 0.35)
+      oscillator.start(start)
+      oscillator.stop(start + 0.35)
+    })
+  } catch {
+    // Web Audio indisponible : on reste silencieux.
+  }
+}
