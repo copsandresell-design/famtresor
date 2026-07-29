@@ -13,14 +13,17 @@ import { ChildHistoryPage } from './pages/child/ChildHistoryPage'
 import { ChildHomePage } from './pages/child/ChildHomePage'
 import { ChildProfilePage } from './pages/child/ChildProfilePage'
 import { ApprovalsPage } from './pages/parent/ApprovalsPage'
+import { BadgeDefsPage } from './pages/parent/BadgeDefsPage'
 import { CalendarPage } from './pages/parent/CalendarPage'
 import { ChildrenPage } from './pages/parent/ChildrenPage'
 import { LogsPage } from './pages/parent/LogsPage'
 import { OverviewPage } from './pages/parent/OverviewPage'
 import { PenaltiesPage } from './pages/parent/PenaltiesPage'
+import { RankDefsPage } from './pages/parent/RankDefsPage'
 import { ShopPage } from './pages/parent/ShopPage'
 import { ChildShopPage } from './pages/child/ChildShopPage'
 import { SettingsPage } from './pages/parent/SettingsPage'
+import { StreakDefsPage } from './pages/parent/StreakDefsPage'
 import { TasksPage } from './pages/parent/TasksPage'
 import { useStore } from './store/useStore'
 
@@ -107,6 +110,9 @@ export default function App() {
                 <Route path="enfants" element={<ChildrenPage />} />
                 <Route path="journal" element={<LogsPage />} />
                 <Route path="reglages" element={<SettingsPage />} />
+                <Route path="reglages/badges" element={<BadgeDefsPage />} />
+                <Route path="reglages/series" element={<StreakDefsPage />} />
+                <Route path="reglages/rangs" element={<RankDefsPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/parent" replace />} />
             </>

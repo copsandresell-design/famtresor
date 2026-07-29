@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { KeyRound, RotateCcw, ScrollText } from 'lucide-react'
+import { KeyRound, Plus, RotateCcw, ScrollText } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
@@ -13,13 +13,107 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
+import { AVATAR_EMOJIS } from '../../lib/categories'
 import { computeBalance } from '../../lib/balance'
 import { computeLifetimePoints, computePoints } from '../../lib/points'
 import { computeRank } from '../../lib/ranks'
 import { useCurrentUser, useStore } from '../../store/useStore'
-import type { User } from '../../types'
+import type { Role, User } from '../../types'
 
 const COLOR_PRESETS = ['#3B82F6', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#06B6D4']
+
+function CreateProfileModal({ onClose }: { onClose: () => void }) {
+  const user = useCurrentUser()
+  const createUser = useStore((s) => s.createUser)
+  const toast = useStore((s) => s.toast)
+
+  const [role, setRole] = useState<Role>('child')
+  const [name, setName] = useState('')
+  const [avatar, setAvatar] = useState(AVATAR_EMOJIS[0])
+  const [color, setColor] = useState(COLOR_PRESETS[0])
+  const [secret, setSecret] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (!user) return null
+  const secretValid = role === 'child' ? /^\d{4}$/.test(secret) : secret.length >= 4
+  const valid = name.trim() && secretValid
+
+  async function submit() {
+    setBusy(true)
+    await createUser({ role, name: name.trim(), avatar, color, secret }, user!.id)
+    toast(`Profil de ${name.trim()} créé.`)
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Nouveau profil">
+      <div className="space-y-4">
+        <Field label="Rôle">
+          <div className="flex gap-2">
+            <Button variant={role === 'child' ? 'primary' : 'soft'} className="flex-1" onClick={() => setRole('child')}>
+              Enfant
+            </Button>
+            <Button variant={role === 'parent' ? 'primary' : 'soft'} className="flex-1" onClick={() => setRole('parent')}>
+              Parent
+            </Button>
+          </div>
+        </Field>
+        <Field label="Prénom *">
+          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+        <Field label="Avatar">
+          <div className="flex flex-wrap gap-1.5">
+            {AVATAR_EMOJIS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setAvatar(e)}
+                aria-pressed={avatar === e}
+                className={cn(
+                  'rounded-lg p-1.5 text-2xl cursor-pointer',
+                  avatar === e ? 'bg-amber-200 dark:bg-amber-400/30' : 'hover:bg-slate-100 dark:hover:bg-slate-800',
+                )}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Couleur">
+          <div className="flex gap-2">
+            {COLOR_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setColor(preset)}
+                aria-label={`Couleur ${preset}`}
+                aria-pressed={color === preset}
+                className={cn(
+                  'h-9 w-9 rounded-full cursor-pointer',
+                  color === preset && 'ring-2 ring-offset-2 ring-slate-500 dark:ring-offset-slate-900',
+                )}
+                style={{ backgroundColor: preset }}
+              />
+            ))}
+          </div>
+        </Field>
+        <Field label={role === 'child' ? 'PIN initial (4 chiffres) *' : 'Mot de passe initial (4 caractères min.) *'}>
+          <input
+            className={inputCls}
+            inputMode={role === 'child' ? 'numeric' : 'text'}
+            maxLength={role === 'child' ? 4 : undefined}
+            value={secret}
+            onChange={(e) => setSecret(role === 'child' ? e.target.value.replace(/\D/g, '') : e.target.value)}
+            placeholder={role === 'child' ? '••••' : 'Au moins 4 caractères'}
+          />
+        </Field>
+        <Button className="w-full" disabled={!valid || busy} onClick={() => void submit()}>
+          {busy ? 'Création…' : 'Créer le profil'}
+        </Button>
+      </div>
+    </Modal>
+  )
+}
 
 function EditChildModal({ child, onClose }: { child: User; onClose: () => void }) {
   const user = useCurrentUser()
@@ -114,6 +208,7 @@ export function ChildrenPage() {
 
   const [editing, setEditing] = useState<User | null>(null)
   const [resetting, setResetting] = useState<User | null>(null)
+  const [creating, setCreating] = useState(false)
 
   if (!user) return null
 
@@ -121,7 +216,13 @@ export function ChildrenPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-black">Enfants</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-black">Enfants</h1>
+        <Button onClick={() => setCreating(true)}>
+          <Plus size={18} />
+          Nouveau profil
+        </Button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {children.map((child) => {
@@ -177,6 +278,7 @@ export function ChildrenPage() {
         })}
       </div>
 
+      {creating && <CreateProfileModal onClose={() => setCreating(false)} />}
       {editing && <EditChildModal child={editing} onClose={() => setEditing(null)} />}
       <ConfirmModal
         open={resetting !== null}
