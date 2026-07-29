@@ -6,11 +6,11 @@ import { computeBalance } from '../lib/balance'
 import { hashSecret, makeSalt, verifySecret } from '../lib/crypto'
 import { formatEuro } from '../lib/format'
 import { uid } from '../lib/id'
-import { computePoints } from '../lib/points'
+import { capWeeklyGain, computePoints, computeTaskPoints } from '../lib/points'
 import { DEFAULT_RANK_DEFS } from '../lib/ranks'
 import { broadcastNotification } from '../lib/realtime'
 import { sendPushTo } from '../lib/push'
-import { isTaskAvailable } from '../lib/recurrence'
+import { approvedOccurrenceIndexToday, isTaskAvailable } from '../lib/recurrence'
 import { computeStreakDefCount } from '../lib/streak'
 import { deleteRecord, fetchAll, pushRecord, type SyncTable } from '../lib/sync'
 import type {
@@ -136,6 +136,8 @@ interface Store {
     opts: { isInitiative: boolean; photoIds?: string[]; comment?: string },
   ) => boolean
   sendMessage: (toChildId: string, text: string, fromId: string) => void
+  /** Notification push libre envoyée par un parent à un ou plusieurs enfants (Réglages). */
+  sendCustomNotification: (childIds: string[], text: string, actorId: string) => void
   approveSubmission: (submissionId: string, parentId: string) => void
   rejectSubmission: (submissionId: string, parentId: string, reason: string) => void
 
@@ -158,6 +160,13 @@ interface Store {
     parentId: string,
     reason?: string,
   ) => boolean
+  /**
+   * Supprime définitivement une validation déjà approuvée : reverse les points (même
+   * mécanique que revertApproval) puis efface la soumission de l'historique de l'enfant —
+   * contrairement à revertApproval, aucune trace de la soumission elle-même ne subsiste
+   * (l'action de suppression, elle, reste tracée dans le journal d'audit du parent).
+   */
+  deleteSubmission: (submissionId: string, parentId: string) => boolean
 
   savePenaltyRule: (
     input: {
@@ -313,6 +322,8 @@ function normalizeSettings(raw: Settings): Settings {
     ...raw,
     features: { ...defaultSettings.features, ...raw.features },
     inactivityPenalty: { ...defaultSettings.inactivityPenalty, ...raw.inactivityPenalty },
+    weeklyPointsCap: { ...defaultSettings.weeklyPointsCap, ...raw.weeklyPointsCap },
+    dailyReminder: { ...defaultSettings.dailyReminder, ...raw.dailyReminder },
   }
 }
 
@@ -407,12 +418,17 @@ export const useStore = create<Store>((set, get) => {
     actorId: string,
   ) {
     const claim: RewardClaim = { id: uid(), childId, key, createdAt: Date.now() }
+    // Le claim est créé quel que soit le montant réellement crédité (voir capWeeklyGain) :
+    // le palier/badge ne doit jamais se re-déclencher juste parce que le plafond hebdo a
+    // réduit ou annulé le gain la première fois.
+    const amount = capWeeklyGain(points, childId, get().pointsTransactions, get().settings.weeklyPointsCap)
+    const capped = amount < points
     const ptx: PointsTransaction = {
       id: uid(),
       childId,
       type,
-      amount: points,
-      description: title,
+      amount,
+      description: `${title}${capped ? ' (plafond hebdo)' : ''}`,
       createdBy: actorId,
       createdAt: Date.now(),
     }
@@ -422,8 +438,8 @@ export const useStore = create<Store>((set, get) => {
     }))
     persist('rewardClaims')
     persist('pointsTransactions')
-    pushLog('reward_earned', actorId, `${title} (+${points} pts)`, childId)
-    notify(childId, 'reward_earned', `+${points} points !`, title, '🏅', '/enfant/profil')
+    pushLog('reward_earned', actorId, `${title} (+${amount} pts)`, childId)
+    notify(childId, 'reward_earned', `+${amount} points !`, title, '🏅', '/enfant/profil')
   }
 
   /**
@@ -978,19 +994,42 @@ export const useStore = create<Store>((set, get) => {
       notify(toChildId, 'message', `Message de ${from?.name ?? 'tes parents'}`, trimmed, '💌', '/enfant/profil')
     },
 
+    sendCustomNotification: (childIds, text, actorId) => {
+      const trimmed = text.trim()
+      if (!trimmed || childIds.length === 0) return
+      const targets = get().users.filter((u) => u.role === 'child' && childIds.includes(u.id))
+      for (const child of targets) {
+        notify(child.id, 'message', 'Message de tes parents', trimmed, '💌', '/enfant/profil')
+      }
+      pushLog(
+        'custom_notification_sent',
+        actorId,
+        `« ${trimmed} » → ${targets.map((c) => c.name).join(', ') || '?'}`,
+      )
+    },
+
     approveSubmission: (submissionId, parentId) => {
-      const { submissions, tasks, settings } = get()
+      const { submissions, tasks, settings, pointsTransactions } = get()
       const sub = submissions.find((s) => s.id === submissionId)
       const task = sub && tasks.find((t) => t.id === sub.taskId)
       if (!sub || !task || sub.status !== 'pending') return
+      // Rendement dégressif : seules les tâches répétables (dailyLimit > 1) sont concernées,
+      // -20 % par répétition déjà validée aujourd'hui, jamais sous 1 point.
+      const occurrenceIndex =
+        task.dailyLimit && task.dailyLimit > 1
+          ? approvedOccurrenceIndexToday(task.id, sub.childId, sub, submissions)
+          : 0
+      const basePoints = computeTaskPoints(task.points, occurrenceIndex)
       const bonus = sub.isInitiative ? settings.initiativeBonus : 0
-      const points = task.points + bonus
+      const rawPoints = basePoints + bonus
+      const points = capWeeklyGain(rawPoints, sub.childId, pointsTransactions, settings.weeklyPointsCap)
+      const capped = points < rawPoints
       const ptx: PointsTransaction = {
         id: uid(),
         childId: sub.childId,
         type: 'task_approval',
         amount: points,
-        description: `${task.icon} ${task.title}${bonus > 0 ? ' ⭐ initiative' : ''}`,
+        description: `${task.icon} ${task.title}${bonus > 0 ? ' ⭐ initiative' : ''}${capped ? ' (plafond hebdo)' : ''}`,
         relatedTo: sub.id,
         createdBy: parentId,
         createdAt: Date.now(),
@@ -1010,7 +1049,7 @@ export const useStore = create<Store>((set, get) => {
         sub.childId,
         'task_approved',
         'Tâche validée ! 🎉',
-        `${task.title} · +${points} points${bonus > 0 ? ' (bonus initiative inclus)' : ''}`,
+        `${task.title} · +${points} points${bonus > 0 ? ' (bonus initiative inclus)' : ''}${capped ? ' · plafond hebdo atteint' : ''}`,
         task.icon,
         '/enfant',
       )
@@ -1067,6 +1106,48 @@ export const useStore = create<Store>((set, get) => {
         'Validation annulée',
         `${task?.title ?? 'Une tâche'} a été repassée ${statusLabel} par un parent.`,
         '↩️',
+        '/enfant',
+      )
+      return true
+    },
+
+    deleteSubmission: (submissionId, parentId) => {
+      const { submissions, tasks, pointsTransactions } = get()
+      const sub = submissions.find((s) => s.id === submissionId)
+      if (!sub || sub.status !== 'approved') return false
+      const task = tasks.find((t) => t.id === sub.taskId)
+      const ptx = pointsTransactions.find((p) => p.relatedTo === sub.id && p.type === 'task_approval')
+      if (ptx) {
+        const reversal: PointsTransaction = {
+          id: uid(),
+          type: 'task_approval_reverted',
+          childId: sub.childId,
+          amount: -ptx.amount,
+          description: `Suppression de validation — ${task?.title ?? 'tâche'}`,
+          relatedTo: ptx.id,
+          createdBy: parentId,
+          createdAt: Date.now(),
+        }
+        set((s) => ({ pointsTransactions: [reversal, ...s.pointsTransactions] }))
+        persist('pointsTransactions')
+      }
+      set((s) => ({ submissions: s.submissions.filter((x) => x.id !== submissionId) }))
+      persist('submissions')
+      deleteRecord('sync_submissions', submissionId)
+      pushLog(
+        'submission_deleted',
+        parentId,
+        `« ${task?.title ?? '?'} » supprimée définitivement${ptx ? ` (-${ptx.amount} pts)` : ''}`,
+        sub.childId,
+        undefined,
+        sub.id,
+      )
+      notify(
+        sub.childId,
+        'task_rejected',
+        'Validation supprimée',
+        `${task?.title ?? 'Une tâche'} validée a été supprimée par un parent.`,
+        '🗑️',
         '/enfant',
       )
       return true

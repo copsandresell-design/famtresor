@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isTaskAvailable, timesSubmittedToday } from './recurrence'
+import { approvedOccurrenceIndexToday, isTaskAvailable, timesSubmittedToday } from './recurrence'
 import type { Task, TaskSubmission } from '../types'
 
 const CHILD = 'child-1'
@@ -106,5 +106,28 @@ describe('timesSubmittedToday', () => {
       makeSub(new Date('2026-07-21T08:00:00')),
     ]
     expect(timesSubmittedToday(task, CHILD, subs, NOW)).toBe(1)
+  })
+})
+
+describe('approvedOccurrenceIndexToday', () => {
+  it('vaut 0 pour la première validation du jour', () => {
+    const sub = makeSub(new Date('2026-07-22T08:00:00'), 'approved')
+    expect(approvedOccurrenceIndexToday('task-1', CHILD, sub, [sub])).toBe(0)
+  })
+
+  it("compte uniquement les validations approuvées antérieures du même jour", () => {
+    const first = makeSub(new Date('2026-07-22T08:00:00'), 'approved')
+    const pendingSameDay = { ...makeSub(new Date('2026-07-22T08:30:00')), id: 'sub-pending' }
+    const rejectedSameDay = { ...makeSub(new Date('2026-07-22T08:45:00'), 'rejected'), id: 'sub-rejected' }
+    const otherDay = { ...makeSub(new Date('2026-07-21T08:00:00'), 'approved'), id: 'sub-yesterday' }
+    const third = makeSub(new Date('2026-07-22T09:00:00'), 'approved')
+    const all = [first, pendingSameDay, rejectedSameDay, otherDay, third]
+    expect(approvedOccurrenceIndexToday('task-1', CHILD, third, all)).toBe(1)
+  })
+
+  it('ignore les validations postérieures dans la journée', () => {
+    const earlier = makeSub(new Date('2026-07-22T08:00:00'), 'approved')
+    const later = makeSub(new Date('2026-07-22T09:00:00'), 'approved')
+    expect(approvedOccurrenceIndexToday('task-1', CHILD, earlier, [earlier, later])).toBe(0)
   })
 })

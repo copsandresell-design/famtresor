@@ -128,6 +128,22 @@ export interface InactivityPenaltySettings {
   severityMultiplier: number
 }
 
+/** Filet de sécurité optionnel : borne le total de points gagnables par un enfant sur une semaine. */
+export interface WeeklyPointsCapSettings {
+  enabled: boolean
+  amount: number
+}
+
+/**
+ * Rappel automatique (cron quotidien) pour les enfants n'ayant encore rien signalé dans la
+ * journée. `hour` est vérifié dans le fuseau Europe/Paris — voir api/daily-reminder.ts pour
+ * la limite de fréquence du cron (une seule vérification par jour sur le plan Vercel Hobby).
+ */
+export interface DailyReminderSettings {
+  enabled: boolean
+  hour: number
+}
+
 export interface Settings {
   familyName: string
   /** Bonus (en points) pour une tâche faite sans qu'on le demande. */
@@ -138,6 +154,8 @@ export interface Settings {
   /** Taux de conversion points → argent (ex: 100 = 100 points valent 1 €). */
   pointsPerEuro: number
   inactivityPenalty: InactivityPenaltySettings
+  weeklyPointsCap: WeeklyPointsCapSettings
+  dailyReminder: DailyReminderSettings
 }
 
 /** Objectif d'épargne fixé par un enfant (ex: un jeu vidéo à 30€). */
