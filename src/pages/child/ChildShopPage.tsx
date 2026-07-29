@@ -1,18 +1,45 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRightLeft, Plus, Sparkles } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
-import { celebrate } from '../../lib/confetti'
+import { db } from '../../db/storage'
+import { celebrate, celebrateFireworks } from '../../lib/confetti'
 import { cn } from '../../lib/cn'
 import { formatEuro, formatRelative } from '../../lib/format'
 import { computePoints } from '../../lib/points'
 import { SHOP_CATEGORIES, SHOP_CATEGORY_KEYS, SHOP_ICON_LIBRARY } from '../../lib/shopCatalog'
+import { playCelebrationSound } from '../../lib/sound'
 import { useCurrentUser, useStore } from '../../store/useStore'
-import type { ShopCategory } from '../../types'
+import type { Redemption, ShopCategory } from '../../types'
+
+/** Petite animation de "déballage" à l'ouverture, une seule fois par échange remis. */
+function UnboxModal({ redemption, onClose }: { redemption: Redemption; onClose: () => void }) {
+  return (
+    <Modal open onClose={onClose} title="Ton lot est arrivé !">
+      <div className="flex flex-col items-center gap-3 pb-2 text-center">
+        <motion.span
+          className="text-7xl"
+          aria-hidden
+          initial={{ scale: 0, rotate: -30 }}
+          animate={{ scale: [0, 1.3, 1], rotate: 0 }}
+          transition={{ type: 'spring', damping: 8, stiffness: 200 }}
+        >
+          {redemption.icon}
+        </motion.span>
+        <p className="font-display text-xl font-bold">{redemption.title}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Profite bien de ta récompense ! 🎉</p>
+        <Button className="mt-2 w-full" onClick={onClose}>
+          Trop cool ! 🎉
+        </Button>
+      </div>
+    </Modal>
+  )
+}
 
 function ProposeWishModal({ childId, onClose }: { childId: string; onClose: () => void }) {
   const proposeWish = useStore((s) => s.proposeWish)
@@ -149,6 +176,27 @@ export function ChildShopPage() {
 
   const [proposing, setProposing] = useState(false)
   const [converting, setConverting] = useState(false)
+  const [unboxing, setUnboxing] = useState<Redemption | null>(null)
+
+  // Détection des échanges fraîchement remis par un parent : petite animation de "déballage".
+  useEffect(() => {
+    const childId = user?.id
+    if (!childId) return
+    const key = `seenFulfilled:${childId}`
+    const fulfilled = redemptions.filter((r) => r.childId === childId && r.status === 'fulfilled')
+    void (async () => {
+      const seen = await db.getItem<string[]>(key)
+      if (seen !== null) {
+        const fresh = fulfilled.find((r) => !seen.includes(r.id))
+        if (fresh) {
+          celebrateFireworks(['#8B5CF6', '#EC4899'])
+          playCelebrationSound()
+          setUnboxing(fresh)
+        }
+      }
+      await db.setItem(key, fulfilled.map((r) => r.id))
+    })()
+  }, [user, redemptions])
 
   if (!user) return null
 
@@ -262,6 +310,10 @@ export function ChildShopPage() {
           onClose={() => setConverting(false)}
         />
       )}
+
+      <AnimatePresence>
+        {unboxing && <UnboxModal redemption={unboxing} onClose={() => setUnboxing(null)} />}
+      </AnimatePresence>
     </div>
   )
 }

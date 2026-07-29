@@ -48,6 +48,9 @@ export function ChildProfilePage() {
     const approved = mine.filter((s) => s.status === 'approved').length
     const rejected = mine.filter((s) => s.status === 'rejected').length
     const reviewed = approved + rejected
+    const thisMonth = mine.filter(
+      (s) => s.status === 'approved' && s.reviewedAt && isSameMonth(s.reviewedAt, Date.now()),
+    ).length
     const gains = pointsTransactions.filter((p) => p.childId === user.id && p.type === 'task_approval')
     let bestWeek = 0
     for (let i = 0; i < 12; i++) {
@@ -59,6 +62,7 @@ export function ChildProfilePage() {
     }
     return {
       approved,
+      thisMonth,
       approvalRate: reviewed > 0 ? Math.round((approved / reviewed) * 100) : null,
       bestWeek,
     }
@@ -174,12 +178,16 @@ export function ChildProfilePage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Card className="p-4 text-center">
           <p className="font-display text-2xl font-bold text-violet-600 dark:text-violet-400">
             {computePoints(pointsTransactions, user.id)}
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">Points</p>
+        </Card>
+        <Card className="p-4 text-center">
+          <p className="font-display text-2xl font-bold">🎯 {stats.thisMonth}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Tâches ce mois-ci</p>
         </Card>
         <Card className="p-4 text-center">
           <p className="font-display text-2xl font-bold">{stats.approved}</p>
