@@ -1,18 +1,48 @@
-import { Download } from 'lucide-react'
+import { Download, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Amount } from '../../components/ui/Amount'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { inputCls } from '../../components/ui/Field'
 import { actionLabel, ACTION_LABELS } from '../../lib/actions'
 import { downloadCsv } from '../../lib/csv'
 import { formatDateShort, formatEuro, formatTime } from '../../lib/format'
-import { useStore } from '../../store/useStore'
+import { useCurrentUser, useStore } from '../../store/useStore'
+import type { AuditLog } from '../../types'
+
+/**
+ * Actions du Journal pour lesquelles un "annuler" ciblé et sûr existe. Volontairement
+ * restreint à ces deux cas : les autres actions (login, réglages, avatar…) n'ont pas de
+ * reversion sensée ou sûre à proposer depuis cette liste générique.
+ */
+function undoableTarget(
+  log: AuditLog,
+  submissions: ReturnType<typeof useStore.getState>['submissions'],
+  transactions: ReturnType<typeof useStore.getState>['transactions'],
+): 'approval' | 'penalty' | null {
+  if (!log.relatedId) return null
+  if (log.action === 'submission_approved') {
+    const sub = submissions.find((s) => s.id === log.relatedId)
+    return sub?.status === 'approved' ? 'approval' : null
+  }
+  if (log.action === 'penalty_applied') {
+    const tx = transactions.find((t) => t.id === log.relatedId)
+    return tx && !tx.cancelled ? 'penalty' : null
+  }
+  return null
+}
 
 export function LogsPage() {
+  const user = useCurrentUser()
   const logs = useStore((s) => s.logs)
   const users = useStore((s) => s.users)
+  const submissions = useStore((s) => s.submissions)
+  const transactions = useStore((s) => s.transactions)
+  const revertApproval = useStore((s) => s.revertApproval)
+  const deletePenaltyTransaction = useStore((s) => s.deletePenaltyTransaction)
+  const toast = useStore((s) => s.toast)
 
   const [childFilter, setChildFilter] = useState('all')
   const [actionFilter, setActionFilter] = useState('all')
@@ -20,6 +50,7 @@ export function LogsPage() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
+  const [undoing, setUndoing] = useState<AuditLog | null>(null)
 
   const children = users.filter((u) => u.role === 'child')
   const parents = users.filter((u) => u.role === 'parent')
@@ -120,23 +151,35 @@ export function LogsPage() {
               <th className="px-4 py-3">Enfant</th>
               <th className="px-4 py-3 text-right">Montant</th>
               <th className="px-4 py-3">Détails</th>
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filtered.slice(0, 200).map((log) => (
-              <tr key={log.id}>
-                <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-slate-500 dark:text-slate-400">
-                  {formatDateShort(log.timestamp)} {formatTime(log.timestamp)}
-                </td>
-                <td className="px-4 py-2.5 font-semibold">{nameOf(log.actorId)}</td>
-                <td className="px-4 py-2.5">{actionLabel(log.action)}</td>
-                <td className="px-4 py-2.5">{nameOf(log.subjectId)}</td>
-                <td className="px-4 py-2.5 text-right">
-                  {log.amount !== undefined && <Amount cents={log.amount} className="text-sm" />}
-                </td>
-                <td className="max-w-64 truncate px-4 py-2.5 text-slate-600 dark:text-slate-300">{log.details}</td>
-              </tr>
-            ))}
+            {filtered.slice(0, 200).map((log) => {
+              const undoTarget = undoableTarget(log, submissions, transactions)
+              return (
+                <tr key={log.id}>
+                  <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-slate-500 dark:text-slate-400">
+                    {formatDateShort(log.timestamp)} {formatTime(log.timestamp)}
+                  </td>
+                  <td className="px-4 py-2.5 font-semibold">{nameOf(log.actorId)}</td>
+                  <td className="px-4 py-2.5">{actionLabel(log.action)}</td>
+                  <td className="px-4 py-2.5">{nameOf(log.subjectId)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    {log.amount !== undefined && <Amount cents={log.amount} className="text-sm" />}
+                  </td>
+                  <td className="max-w-64 truncate px-4 py-2.5 text-slate-600 dark:text-slate-300">{log.details}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                    {undoTarget && (
+                      <Button variant="ghost" size="sm" onClick={() => setUndoing(log)}>
+                        <Undo2 size={14} />
+                        Annuler
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
         {filtered.length === 0 && <EmptyState emoji="📜" text="Aucune entrée ne correspond aux filtres." />}
@@ -146,6 +189,26 @@ export function LogsPage() {
           </p>
         )}
       </Card>
+
+      <ConfirmModal
+        open={undoing !== null}
+        onClose={() => setUndoing(null)}
+        title="Annuler cette action ?"
+        message={`« ${undoing?.details ?? ''} » sera annulée. Cette action reste tracée dans le journal.`}
+        confirmLabel="Oui, annuler"
+        danger
+        onConfirm={() => {
+          if (!undoing || !user) return
+          const target = undoableTarget(undoing, submissions, transactions)
+          if (target === 'approval' && undoing.relatedId) {
+            revertApproval(undoing.relatedId, 'pending', user.id)
+            toast('Validation annulée.')
+          } else if (target === 'penalty' && undoing.relatedId) {
+            deletePenaltyTransaction(undoing.relatedId, user.id)
+            toast('Pénalité annulée.')
+          }
+        }}
+      />
     </div>
   )
 }

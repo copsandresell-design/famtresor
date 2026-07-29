@@ -1,5 +1,5 @@
 import { AnimatePresence } from 'framer-motion'
-import { Check, X } from 'lucide-react'
+import { Check, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { PhotoLightbox } from '../../components/photos/PhotoLightbox'
 import { PhotoThumb } from '../../components/photos/PhotoThumb'
@@ -82,6 +82,7 @@ export function ApprovalsPage() {
   const settings = useStore((s) => s.settings)
   const approve = useStore((s) => s.approveSubmission)
   const reject = useStore((s) => s.rejectSubmission)
+  const revertApproval = useStore((s) => s.revertApproval)
   const toast = useStore((s) => s.toast)
 
   const [tab, setTab] = useState<SubmissionStatus>('pending')
@@ -89,6 +90,7 @@ export function ApprovalsPage() {
   const [reason, setReason] = useState('')
   const [messaging, setMessaging] = useState<User | null>(null)
   const [lightbox, setLightbox] = useState<{ ids: string[]; index: number } | null>(null)
+  const [reverting, setReverting] = useState<TaskSubmission | null>(null)
 
   if (!user) return null
 
@@ -201,6 +203,15 @@ export function ApprovalsPage() {
                   </Button>
                 </div>
               )}
+
+              {sub.status === 'approved' && (
+                <div className="mt-3 flex justify-end">
+                  <Button variant="ghost" size="sm" onClick={() => setReverting(sub)}>
+                    <Undo2 size={16} />
+                    Annuler cette validation
+                  </Button>
+                </div>
+              )}
             </Card>
           )
         })}
@@ -211,6 +222,46 @@ export function ApprovalsPage() {
           />
         )}
       </div>
+
+      <Modal
+        open={reverting !== null}
+        onClose={() => setReverting(null)}
+        title="Annuler cette validation ?"
+      >
+        <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+          {reverting && findChild(reverting)?.name} perdra le gain déjà crédité. Choisis ce que devient la
+          tâche :
+        </p>
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="soft"
+            onClick={() => {
+              if (reverting) {
+                revertApproval(reverting.id, 'pending', user.id)
+                toast('Validation annulée, la tâche est repassée en attente.')
+              }
+              setReverting(null)
+            }}
+          >
+            Repasser en attente
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (reverting) {
+                revertApproval(reverting.id, 'rejected', user.id, 'Validation annulée par erreur')
+                toast('Validation annulée, la tâche est marquée refusée.')
+              }
+              setReverting(null)
+            }}
+          >
+            Marquer refusée
+          </Button>
+          <Button variant="ghost" onClick={() => setReverting(null)}>
+            Ne rien faire
+          </Button>
+        </div>
+      </Modal>
 
       <Modal open={rejecting !== null} onClose={() => setRejecting(null)} title="Refuser la tâche">
         <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
