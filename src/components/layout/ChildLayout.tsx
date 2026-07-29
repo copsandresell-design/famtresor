@@ -1,4 +1,4 @@
-import { History, Home, UserRound } from 'lucide-react'
+import { Gift, History, Home, UserRound } from 'lucide-react'
 import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/cn'
@@ -6,15 +6,18 @@ import { useCurrentUser, useStore } from '../../store/useStore'
 import { NotificationCenter } from '../NotificationCenter'
 import { ChildAvatar } from '../ui/ChildAvatar'
 
-const links = [
+const BASE_LINKS = [
   { to: '/enfant', label: 'Accueil', icon: Home, end: true },
   { to: '/enfant/historique', label: 'Historique', icon: History },
   { to: '/enfant/profil', label: 'Profil', icon: UserRound },
 ]
 
+const SHOP_LINK = { to: '/enfant/boutique', label: 'Boutique', icon: Gift, end: false }
+
 export function ChildLayout() {
   const user = useCurrentUser()
   const touchSession = useStore((s) => s.touchSession)
+  const shopEnabled = useStore((s) => s.settings.features.shop)
   const location = useLocation()
 
   useEffect(() => {
@@ -22,6 +25,8 @@ export function ChildLayout() {
   }, [location.pathname, touchSession])
 
   if (!user) return null
+
+  const links = shopEnabled ? [...BASE_LINKS, SHOP_LINK] : BASE_LINKS
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -38,7 +43,12 @@ export function ChildLayout() {
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+      <nav
+        className={cn(
+          'fixed inset-x-0 bottom-0 z-40 grid gap-1 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95',
+          shopEnabled ? 'grid-cols-4' : 'grid-cols-3',
+        )}
+      >
         {links.map((link) => (
           <NavLink
             key={link.to}

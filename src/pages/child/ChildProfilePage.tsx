@@ -15,6 +15,7 @@ import { cn } from '../../lib/cn'
 import { computeBadges } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
 import { formatEuro, formatRelative } from '../../lib/format'
+import { computePoints } from '../../lib/points'
 import { useCurrentUser, useStore } from '../../store/useStore'
 
 const WEEK = { weekStartsOn: 1 as const }
@@ -25,6 +26,7 @@ export function ChildProfilePage() {
   const settings = useStore((s) => s.settings)
   const transactions = useStore((s) => s.transactions)
   const submissions = useStore((s) => s.submissions)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const messages = useStore((s) => s.messages)
   const logout = useStore((s) => s.logout)
   const [editingAvatar, setEditingAvatar] = useState(false)
@@ -108,7 +110,13 @@ export function ChildProfilePage() {
         )}
       </Card>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card className="p-4 text-center">
+          <p className="font-display text-2xl font-bold text-violet-600 dark:text-violet-400">
+            {computePoints(pointsTransactions, user.id)}
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Points</p>
+        </Card>
         <Card className="p-4 text-center">
           <p className="font-display text-2xl font-bold">{stats.approved}</p>
           <p className="text-xs text-slate-500 dark:text-slate-400">Tâches validées</p>
@@ -154,11 +162,16 @@ export function ChildProfilePage() {
                   </div>
                   <p className="text-[10px] text-slate-400">
                     {badge.progress.current}/{badge.progress.target}
-                    {badge.progress.unit ? ` ${badge.progress.unit}` : ''}
+                    {badge.progress.unit ? ` ${badge.progress.unit}` : ''} · +{badge.points} pts
                   </p>
                 </>
               )}
-              {badge.unlocked && <p className="text-[10px] text-emerald-500">Débloqué ✓</p>}
+              {!badge.unlocked && !badge.progress && (
+                <p className="text-[10px] text-slate-400">+{badge.points} pts</p>
+              )}
+              {badge.unlocked && (
+                <p className="text-[10px] text-emerald-500">Débloqué ✓ (+{badge.points} pts)</p>
+              )}
             </Card>
           ))}
         </div>
