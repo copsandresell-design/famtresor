@@ -11,8 +11,23 @@ export interface BadgeState {
   label: string
   description: string
   unlocked: boolean
+  /** Points gagnés (monnaie séparée de l'argent) au déblocage. */
+  points: number
   /** Progression vers le déblocage (absente pour les badges tout-ou-rien). */
   progress?: { current: number; target: number; unit?: string }
+}
+
+/** Points crédités une fois par enfant quand le badge se débloque (voir useStore.checkRewards). */
+export const BADGE_POINTS: Record<string, number> = {
+  demarrage: 20,
+  streaker: 30,
+  rapidite: 25,
+  'initiative-master': 100,
+  'golden-week': 80,
+  perfectionist: 60,
+  teamplayer: 50,
+  'month-mvp': 150,
+  millionaire: 200,
 }
 
 interface BadgeContext {
@@ -53,7 +68,7 @@ export function computeBadges({ childId, submissions, transactions, children, no
     monthEarned > 0 &&
     children.every((c) => c.id === childId || earnedOf(c.id, (t) => isSameMonth(t.createdAt, now)) <= monthEarned)
 
-  return [
+  const entries: Omit<BadgeState, 'points'>[] = [
     {
       id: 'demarrage',
       emoji: '🚀',
@@ -124,4 +139,6 @@ export function computeBadges({ childId, submissions, transactions, children, no
       progress: { current: Math.min(Math.floor(earned / 100), 100), target: 100, unit: '€' },
     },
   ]
+
+  return entries.map((entry) => ({ ...entry, points: BADGE_POINTS[entry.id] ?? 0 }))
 }

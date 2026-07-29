@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeStreak } from './streak'
+import { computeStreak, streakMilestonesReached } from './streak'
 import type { TaskSubmission } from '../types'
 
 const CHILD = 'child-1'
@@ -43,5 +43,16 @@ describe('computeStreak', () => {
     const streak = computeStreak(CHILD, subs, NOW)
     expect(streak.count).toBe(0)
     expect(streak.doneToday).toBe(false)
+  })
+})
+
+describe('streakMilestonesReached', () => {
+  it("ne renvoie aucun palier avant le premier (3 jours)", () => {
+    expect(streakMilestonesReached(2)).toEqual([])
+  })
+
+  it('renvoie tous les paliers atteints, triés croissant', () => {
+    expect(streakMilestonesReached(10)).toEqual([3, 7])
+    expect(streakMilestonesReached(30)).toEqual([3, 7, 14, 30])
   })
 })

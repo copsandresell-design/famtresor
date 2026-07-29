@@ -14,6 +14,11 @@ const TYPE_TINTS: Record<AppNotification['type'], string> = {
   task_rejected: 'bg-rose-100 dark:bg-rose-900/40',
   message: 'bg-pink-100 dark:bg-pink-900/40',
   penalty: 'bg-orange-100 dark:bg-orange-900/40',
+  reward_earned: 'bg-violet-100 dark:bg-violet-900/40',
+  wish_submitted: 'bg-cyan-100 dark:bg-cyan-900/40',
+  wish_decided: 'bg-cyan-100 dark:bg-cyan-900/40',
+  redemption_requested: 'bg-fuchsia-100 dark:bg-fuchsia-900/40',
+  redemption_fulfilled: 'bg-emerald-100 dark:bg-emerald-900/40',
 }
 
 export function NotificationCenter({ align = 'right' }: { align?: 'left' | 'right' }) {

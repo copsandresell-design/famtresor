@@ -10,6 +10,17 @@ export interface Streak {
 
 const dayKey = (d: Date | number) => format(d, 'yyyy-MM-dd')
 
+/** Bonus de points versé une fois par enfant à chaque palier de série atteint. */
+export const STREAK_BONUS_POINTS: Record<number, number> = { 3: 15, 7: 40, 14: 90, 30: 250 }
+
+/** Paliers de STREAK_BONUS_POINTS atteints par une série de `count` jours, triés croissant. */
+export function streakMilestonesReached(count: number): number[] {
+  return Object.keys(STREAK_BONUS_POINTS)
+    .map(Number)
+    .filter((milestone) => count >= milestone)
+    .sort((a, b) => a - b)
+}
+
 /**
  * Série de jours consécutifs avec au moins une tâche signalée (hors refus).
  * Si rien aujourd'hui, la série d'hier tient encore — elle se joue aujourd'hui.
