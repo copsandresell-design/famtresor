@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Amount } from '../../components/ui/Amount'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { PointsAmount } from '../../components/ui/PointsAmount'
 import { Tabs } from '../../components/ui/Tabs'
 import { formatDay, formatTime } from '../../lib/format'
 import { useCurrentUser, useStore } from '../../store/useStore'
@@ -16,6 +17,7 @@ interface Entry {
   icon: string
   label: string
   amount?: number
+  points?: number
   status: 'approved' | 'rejected' | 'pending' | 'transaction'
   note?: string
 }
@@ -23,6 +25,7 @@ interface Entry {
 export function ChildHistoryPage() {
   const user = useCurrentUser()
   const transactions = useStore((s) => s.transactions)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const submissions = useStore((s) => s.submissions)
   const tasks = useStore((s) => s.tasks)
   const [period, setPeriod] = useState<Period>('week')
@@ -39,6 +42,16 @@ export function ChildHistoryPage() {
         amount: t.amount,
         status: 'transaction',
       }))
+    const pointsEntries: Entry[] = pointsTransactions
+      .filter((p) => p.childId === user.id)
+      .map((p) => ({
+        id: p.id,
+        ts: p.createdAt,
+        icon: p.amount >= 0 ? '🎯' : '🔻',
+        label: p.description,
+        points: p.amount,
+        status: 'transaction',
+      }))
     const subEntries: Entry[] = submissions
       .filter((s) => s.childId === user.id && s.status !== 'approved')
       .map((s) => {
@@ -52,8 +65,8 @@ export function ChildHistoryPage() {
           note: s.rejectionReason,
         }
       })
-    return [...txEntries, ...subEntries].sort((a, b) => b.ts - a.ts)
-  }, [user, transactions, submissions, tasks])
+    return [...txEntries, ...pointsEntries, ...subEntries].sort((a, b) => b.ts - a.ts)
+  }, [user, transactions, pointsTransactions, submissions, tasks])
 
   const filtered = entries.filter((e) => {
     if (period === 'week') return isSameWeek(e.ts, Date.now(), WEEK)
@@ -105,6 +118,7 @@ export function ChildHistoryPage() {
                     </p>
                   </div>
                   {entry.amount !== undefined && <Amount cents={entry.amount} className="text-sm" />}
+                  {entry.points !== undefined && <PointsAmount points={entry.points} className="text-sm" />}
                 </div>
               ))}
             </Card>

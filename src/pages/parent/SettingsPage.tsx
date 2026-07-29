@@ -46,7 +46,7 @@ export function SettingsPage() {
   const toast = useStore((s) => s.toast)
 
   const [familyName, setFamilyName] = useState(settings.familyName)
-  const [bonus, setBonus] = useState(centsToEuroInput(settings.initiativeBonus))
+  const [bonus, setBonus] = useState(String(settings.initiativeBonus))
   const [minBalance, setMinBalance] = useState(centsToEuroInput(settings.minBalance))
   const [password, setPassword] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
@@ -62,7 +62,7 @@ export function SettingsPage() {
     updateSettings(
       {
         familyName: familyName.trim() || 'FamTrésor',
-        initiativeBonus: Math.max(0, euroToCents(bonus)),
+        initiativeBonus: Math.max(0, parseInt(bonus, 10) || 0),
         minBalance: Math.min(0, euroToCents(minBalance)),
       },
       user!.id,
@@ -111,13 +111,13 @@ export function SettingsPage() {
           <input className={inputCls} value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Bonus initiative (€)">
+          <Field label="Bonus initiative (points)">
             <input
               className={inputCls}
               type="number"
               min="0"
-              step="0.01"
-              inputMode="decimal"
+              step="1"
+              inputMode="numeric"
               value={bonus}
               onChange={(e) => setBonus(e.target.value)}
             />

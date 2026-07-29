@@ -14,6 +14,7 @@ import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
 import { computeBalance } from '../../lib/balance'
+import { computePoints } from '../../lib/points'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { User } from '../../types'
 
@@ -104,6 +105,7 @@ export function ChildrenPage() {
   const user = useCurrentUser()
   const users = useStore((s) => s.users)
   const transactions = useStore((s) => s.transactions)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const updateChild = useStore((s) => s.updateChild)
   const resetBalance = useStore((s) => s.resetBalance)
   const toast = useStore((s) => s.toast)
@@ -129,7 +131,12 @@ export function ChildrenPage() {
                   {child.name}
                   {!child.isActive && <Badge>Inactif</Badge>}
                 </p>
-                <AnimatedBalance cents={computeBalance(transactions, child.id)} className="text-xl font-black" />
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <AnimatedBalance cents={computeBalance(transactions, child.id)} className="text-xl font-black" />
+                  <span className="text-sm font-bold text-violet-600 dark:text-violet-400">
+                    {computePoints(pointsTransactions, child.id)} pts
+                  </span>
+                </div>
                 <p className="text-xs text-slate-400">
                   Compte créé le {format(child.createdAt, 'd MMMM yyyy', { locale: fr })}
                 </p>

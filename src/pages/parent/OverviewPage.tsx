@@ -9,26 +9,27 @@ import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ChildAvatar } from '../../components/ui/ChildAvatar'
+import { PointsAmount } from '../../components/ui/PointsAmount'
 import { computeBalance } from '../../lib/balance'
-import { formatEuro, formatRelative } from '../../lib/format'
+import { formatRelative } from '../../lib/format'
 import { useStore } from '../../store/useStore'
-import type { Transaction, User } from '../../types'
+import type { PointsTransaction, User } from '../../types'
 
 const WEEK = { weekStartsOn: 1 as const }
 const MEDALS = ['🥇', '🥈', '🥉']
 
-/** Classement des enfants par gains du mois — visible seulement si activé dans Réglages. */
-function LeaderboardCard({ children: kids, transactions }: { children: User[]; transactions: Transaction[] }) {
+/** Classement des enfants par points gagnés (tâches) ce mois — visible seulement si activé dans Réglages. */
+function LeaderboardCard({ children: kids, pointsTransactions }: { children: User[]; pointsTransactions: PointsTransaction[] }) {
   const ranked = useMemo(() => {
     return kids
       .map((child) => {
-        const monthGains = transactions
-          .filter((t) => t.childId === child.id && t.type === 'task_approval' && isSameMonth(t.createdAt, Date.now()))
-          .reduce((sum, t) => sum + t.amount, 0)
+        const monthGains = pointsTransactions
+          .filter((p) => p.childId === child.id && p.type === 'task_approval' && isSameMonth(p.createdAt, Date.now()))
+          .reduce((sum, p) => sum + p.amount, 0)
         return { child, monthGains }
       })
       .sort((a, b) => b.monthGains - a.monthGains)
-  }, [kids, transactions])
+  }, [kids, pointsTransactions])
 
   if (ranked.length === 0) return null
 
@@ -49,8 +50,8 @@ function LeaderboardCard({ children: kids, transactions }: { children: User[]; t
             </span>
             <ChildAvatar user={child} size="sm" />
             <p className="min-w-0 flex-1 truncate text-sm font-semibold">{child.name}</p>
-            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-              {monthGains > 0 ? formatEuro(monthGains) : '—'}
+            <span className="text-sm font-bold text-violet-600 dark:text-violet-400">
+              {monthGains > 0 ? `${monthGains} pts` : '—'}
             </span>
           </div>
         ))}
@@ -60,13 +61,13 @@ function LeaderboardCard({ children: kids, transactions }: { children: User[]; t
 }
 
 function Sparkline({ childId, color }: { childId: string; color: string }) {
-  const transactions = useStore((s) => s.transactions)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const now = Date.now()
   const values = Array.from({ length: 7 }, (_, i) => {
     const cutoff = subDays(now, 6 - i).setHours(23, 59, 59, 999)
-    return transactions
-      .filter((t) => t.childId === childId && t.createdAt <= cutoff)
-      .reduce((sum, t) => sum + t.amount, 0)
+    return pointsTransactions
+      .filter((p) => p.childId === childId && p.createdAt <= cutoff)
+      .reduce((sum, p) => sum + p.amount, 0)
   })
   const min = Math.min(...values)
   const range = Math.max(...values) - min || 1
@@ -87,13 +88,13 @@ function Sparkline({ childId, color }: { childId: string; color: string }) {
   )
 }
 
-/** Barres empilées des gains des 7 derniers jours, une couleur par enfant. */
+/** Barres empilées des points gagnés (tâches) des 7 derniers jours, une couleur par enfant. */
 function WeeklyActivityChart({
   children: kids,
-  transactions,
+  pointsTransactions,
 }: {
   children: User[]
-  transactions: Transaction[]
+  pointsTransactions: PointsTransaction[]
 }) {
   const days = useMemo(() => {
     const now = Date.now()
@@ -101,19 +102,19 @@ function WeeklyActivityChart({
       const date = subDays(now, 6 - i)
       const gains = kids.map((child) => ({
         child,
-        amount: transactions
+        amount: pointsTransactions
           .filter(
-            (t) =>
-              t.childId === child.id &&
-              t.type === 'task_approval' &&
-              t.amount > 0 &&
-              isSameDay(t.createdAt, date),
+            (p) =>
+              p.childId === child.id &&
+              p.type === 'task_approval' &&
+              p.amount > 0 &&
+              isSameDay(p.createdAt, date),
           )
-          .reduce((sum, t) => sum + t.amount, 0),
+          .reduce((sum, p) => sum + p.amount, 0),
       }))
       return { date, gains, total: gains.reduce((s, g) => s + g.amount, 0) }
     })
-  }, [kids, transactions])
+  }, [kids, pointsTransactions])
 
   const max = Math.max(...days.map((d) => d.total), 1)
 
@@ -130,13 +131,11 @@ function WeeklyActivityChart({
           ))}
         </div>
       </div>
-      <div className="flex items-end gap-2" style={{ height: 120 }} role="img" aria-label="Gains par jour sur 7 jours">
+      <div className="flex items-end gap-2" style={{ height: 120 }} role="img" aria-label="Points gagnés par jour sur 7 jours">
         {days.map(({ date, gains, total }, i) => (
           <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
             {total > 0 && (
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
-                {formatEuro(total).replace(/,00/, '')}
-              </span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{total}</span>
             )}
             <div className="flex w-full max-w-9 flex-col-reverse overflow-hidden rounded-md" style={{ height: `${(total / max) * 72}%` }}>
               {gains
@@ -196,6 +195,7 @@ function KpiCard({
 export function OverviewPage() {
   const users = useStore((s) => s.users)
   const transactions = useStore((s) => s.transactions)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const submissions = useStore((s) => s.submissions)
   const settings = useStore((s) => s.settings)
   const navigate = useNavigate()
@@ -204,9 +204,9 @@ export function OverviewPage() {
   const familyTotal = children.reduce((sum, c) => sum + computeBalance(transactions, c.id), 0)
   const pending = submissions.filter((s) => s.status === 'pending')
   const approvedToday = submissions.filter((s) => s.status === 'approved' && s.reviewedAt && isToday(s.reviewedAt))
-  const weekGains = transactions
-    .filter((t) => t.amount > 0 && t.type === 'task_approval' && isSameWeek(t.createdAt, Date.now(), WEEK))
-    .reduce((sum, t) => sum + t.amount, 0)
+  const weekPoints = pointsTransactions
+    .filter((p) => p.amount > 0 && p.type === 'task_approval' && isSameWeek(p.createdAt, Date.now(), WEEK))
+    .reduce((sum, p) => sum + p.amount, 0)
   const hasDefaultSecrets = users.some((u) => u.usesDefaultSecret)
 
   return (
@@ -243,9 +243,9 @@ export function OverviewPage() {
         </Card>
         <KpiCard
           icon={<TrendingUp size={20} />}
-          iconCls="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400"
-          label="Gains cette semaine"
-          value={<span className="text-emerald-600 dark:text-emerald-400">{formatEuro(weekGains)}</span>}
+          iconCls="bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400"
+          label="Points cette semaine"
+          value={<span className="text-violet-600 dark:text-violet-400">{weekPoints} pts</span>}
         />
         <KpiCard
           icon={<CheckCircle2 size={20} />}
@@ -263,11 +263,11 @@ export function OverviewPage() {
       </div>
 
       {children.length > 0 && (
-        <WeeklyActivityChart children={children} transactions={transactions} />
+        <WeeklyActivityChart children={children} pointsTransactions={pointsTransactions} />
       )}
 
       {settings.features.leaderboard && children.length > 0 && (
-        <LeaderboardCard children={children} transactions={transactions} />
+        <LeaderboardCard children={children} pointsTransactions={pointsTransactions} />
       )}
 
       <div>
@@ -314,6 +314,28 @@ export function OverviewPage() {
             )
           })}
         </div>
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-lg font-bold">Derniers points</h2>
+        <Card className="divide-y divide-slate-100 dark:divide-slate-800">
+          {pointsTransactions.slice(0, 6).map((ptx) => {
+            const child = users.find((u) => u.id === ptx.childId)
+            return (
+              <div key={ptx.id} className="flex items-center gap-3 px-4 py-3">
+                {child && <ChildAvatar user={child} size="sm" />}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm">{ptx.description}</p>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">{formatRelative(ptx.createdAt)}</p>
+                </div>
+                <PointsAmount points={ptx.amount} className="text-sm" />
+              </div>
+            )
+          })}
+          {pointsTransactions.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-slate-500">Aucun point gagné pour l'instant.</p>
+          )}
+        </Card>
       </div>
 
       <div>

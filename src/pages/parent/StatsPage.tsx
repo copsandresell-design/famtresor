@@ -26,12 +26,15 @@ import { useStore } from '../../store/useStore'
 
 const WEEK = { weekStartsOn: 1 as const }
 
+const pointsTick = (v: number) => `${v}`
+const pointsTooltip = (v: number) => `${v} pts`
 const euroTick = (v: number) => `${(v / 100).toFixed(0)}€`
 const euroTooltip = (v: number) => formatEuro(v)
 
 export function StatsPage() {
   const users = useStore((s) => s.users)
   const transactions = useStore((s) => s.transactions)
+  const pointsTransactions = useStore((s) => s.pointsTransactions)
   const submissions = useStore((s) => s.submissions)
   const tasks = useStore((s) => s.tasks)
 
@@ -45,15 +48,15 @@ export function StatsPage() {
         const approved = mine.filter((s) => s.status === 'approved')
         const rejected = mine.filter((s) => s.status === 'rejected')
         const reviewed = approved.length + rejected.length
-        const gains = transactions.filter(
-          (t) => t.childId === child.id && t.type === 'task_approval',
+        const gains = pointsTransactions.filter(
+          (p) => p.childId === child.id && p.type === 'task_approval',
         )
         const monthGains = gains
-          .filter((t) => isSameMonth(t.createdAt, now))
-          .reduce((sum, t) => sum + t.amount, 0)
+          .filter((p) => isSameMonth(p.createdAt, now))
+          .reduce((sum, p) => sum + p.amount, 0)
         const weekGains = gains
-          .filter((t) => isSameWeek(t.createdAt, now, WEEK))
-          .reduce((sum, t) => sum + t.amount, 0)
+          .filter((p) => isSameWeek(p.createdAt, now, WEEK))
+          .reduce((sum, p) => sum + p.amount, 0)
 
         const taskCounts = new Map<string, number>()
         for (const sub of approved) {
@@ -72,7 +75,7 @@ export function StatsPage() {
           favorite: favorite ? `${favorite.icon} ${favorite.title}` : '—',
         }
       }),
-    [children, submissions, transactions, tasks, now],
+    [children, submissions, transactions, pointsTransactions, tasks, now],
   )
 
   const ranking = [...perChild].sort((a, b) => b.monthGains - a.monthGains)
@@ -86,18 +89,18 @@ export function StatsPage() {
           label: i === 3 ? 'Cette sem.' : `S. du ${formatDateShort(weekStart.getTime())}`,
         }
         for (const child of children) {
-          row[child.id] = transactions
+          row[child.id] = pointsTransactions
             .filter(
-              (t) =>
-                t.childId === child.id &&
-                t.type === 'task_approval' &&
-                isSameWeek(t.createdAt, weekStart, WEEK),
+              (p) =>
+                p.childId === child.id &&
+                p.type === 'task_approval' &&
+                isSameWeek(p.createdAt, weekStart, WEEK),
             )
-            .reduce((sum, t) => sum + t.amount, 0)
+            .reduce((sum, p) => sum + p.amount, 0)
         }
         return row
       }),
-    [children, transactions, now],
+    [children, pointsTransactions, now],
   )
 
   const trendData = useMemo(
@@ -128,7 +131,7 @@ export function StatsPage() {
     }))
   }, [submissions, tasks])
 
-  const hasData = transactions.length > 0
+  const hasData = transactions.length > 0 || pointsTransactions.length > 0
 
   return (
     <div className="space-y-6">
@@ -159,7 +162,7 @@ export function StatsPage() {
                     {winner && ' — MVP du mois 👑'}
                   </p>
                   <p className={winner ? 'text-sm text-white/85' : 'text-sm text-slate-500 dark:text-slate-400'}>
-                    {formatEuro(entry.monthGains)} ce mois-ci
+                    {entry.monthGains} pts ce mois-ci
                   </p>
                 </div>
               </Card>
@@ -178,10 +181,10 @@ export function StatsPage() {
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               <dt className="text-slate-500 dark:text-slate-400">Solde actuel</dt>
               <dd className="text-right font-bold tabular-nums">{formatEuro(entry.balance)}</dd>
-              <dt className="text-slate-500 dark:text-slate-400">Gains semaine</dt>
-              <dd className="text-right font-bold tabular-nums">{formatEuro(entry.weekGains)}</dd>
-              <dt className="text-slate-500 dark:text-slate-400">Gains mois</dt>
-              <dd className="text-right font-bold tabular-nums">{formatEuro(entry.monthGains)}</dd>
+              <dt className="text-slate-500 dark:text-slate-400">Points semaine</dt>
+              <dd className="text-right font-bold tabular-nums">{entry.weekGains} pts</dd>
+              <dt className="text-slate-500 dark:text-slate-400">Points mois</dt>
+              <dd className="text-right font-bold tabular-nums">{entry.monthGains} pts</dd>
               <dt className="text-slate-500 dark:text-slate-400">Tâches validées</dt>
               <dd className="text-right font-bold">{entry.completed}</dd>
               <dt className="text-slate-500 dark:text-slate-400">Taux d'approbation</dt>
@@ -198,14 +201,14 @@ export function StatsPage() {
       {hasData ? (
         <>
           <Card className="p-5">
-            <h2 className="mb-4 text-lg font-bold">Gains par semaine</h2>
+            <h2 className="mb-4 text-lg font-bold">Points par semaine</h2>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weeklyData}>
                   <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} />
                   <XAxis dataKey="label" fontSize={12} />
-                  <YAxis tickFormatter={euroTick} fontSize={12} width={44} />
-                  <Tooltip formatter={euroTooltip} />
+                  <YAxis tickFormatter={pointsTick} fontSize={12} width={44} />
+                  <Tooltip formatter={pointsTooltip} />
                   <Legend />
                   {children.map((child) => (
                     <Bar

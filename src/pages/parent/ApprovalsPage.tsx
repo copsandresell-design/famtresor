@@ -3,7 +3,6 @@ import { Check, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { PhotoLightbox } from '../../components/photos/PhotoLightbox'
 import { PhotoThumb } from '../../components/photos/PhotoThumb'
-import { Amount } from '../../components/ui/Amount'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -11,10 +10,11 @@ import { ChildAvatar } from '../../components/ui/ChildAvatar'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
+import { PointsAmount } from '../../components/ui/PointsAmount'
 import { Tabs } from '../../components/ui/Tabs'
 import { celebrate } from '../../lib/confetti'
 import { gradientEnd } from '../../lib/colors'
-import { formatEuro, formatRelative } from '../../lib/format'
+import { formatRelative } from '../../lib/format'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { SubmissionStatus, TaskSubmission, User } from '../../types'
 
@@ -124,7 +124,7 @@ export function ApprovalsPage() {
           const child = findChild(sub)
           if (!child) return null
           const bonus = sub.isInitiative ? settings.initiativeBonus : 0
-          const total = (task?.amount ?? 0) + bonus
+          const total = (task?.points ?? 0) + bonus
           return (
             <Card key={sub.id} className="p-4">
               <div className="flex items-center gap-3">
@@ -143,7 +143,7 @@ export function ApprovalsPage() {
                   )}
                   {sub.isInitiative && (
                     <Badge tone="amber" className="mt-1">
-                      ⭐ Initiative +{formatEuro(settings.initiativeBonus)}
+                      ⭐ Initiative +{settings.initiativeBonus} pts
                     </Badge>
                   )}
                   {sub.status === 'rejected' && sub.rejectionReason && (
@@ -154,10 +154,10 @@ export function ApprovalsPage() {
                 </div>
                 <div className="text-right">
                   {sub.status === 'approved' ? (
-                    <Amount cents={total} />
+                    <PointsAmount points={total} />
                   ) : (
                     <span className="font-bold text-slate-700 dark:text-slate-200">
-                      +{formatEuro(total)}
+                      +{total} pts
                     </span>
                   )}
                 </div>
@@ -194,7 +194,7 @@ export function ApprovalsPage() {
                     onClick={() => {
                       approve(sub.id, user.id)
                       celebrate([child.color, gradientEnd(child.color)])
-                      toast(`Validé ! ${child.name} gagne ${formatEuro(total)}.`)
+                      toast(`Validé ! ${child.name} gagne ${total} points.`)
                       setMessaging(child)
                     }}
                   >

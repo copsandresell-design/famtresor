@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Flame, Hourglass, Sparkles } from 'lucide-react'
+import { Flame, Hourglass, Sparkles, Wallet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PhotoPicker, type PickedPhoto } from '../../components/photos/PhotoPicker'
-import { Amount } from '../../components/ui/Amount'
+import { PointsAmount } from '../../components/ui/PointsAmount'
 import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
 import { AvatarEditorModal } from '../../components/ui/AvatarEditorModal'
 import { Button } from '../../components/ui/Button'
@@ -22,7 +22,7 @@ import { celebrateFireworks } from '../../lib/confetti'
 import { playCelebrationSound } from '../../lib/sound'
 import { childGradient, gradientEnd } from '../../lib/colors'
 import { formatEuro, formatRelative } from '../../lib/format'
-import { isTaskAvailable } from '../../lib/recurrence'
+import { isTaskAvailable, timesSubmittedToday } from '../../lib/recurrence'
 import { computeStreak } from '../../lib/streak'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { Task } from '../../types'
@@ -124,7 +124,7 @@ export function ChildHomePage() {
     if (!childId) return
     const key = `seenBadges:${childId}`
     const children = users.filter((u) => u.role === 'child' && u.isActive)
-    const unlocked = computeBadges({ childId, submissions, transactions, children })
+    const unlocked = computeBadges({ childId, submissions, pointsTransactions, children })
       .filter((b) => b.unlocked)
     void (async () => {
       const seen = await db.getItem<string[]>(key)
@@ -138,7 +138,7 @@ export function ChildHomePage() {
       }
       await db.setItem(key, unlocked.map((b) => b.id))
     })()
-  }, [childId, submissions, transactions, users])
+  }, [childId, submissions, pointsTransactions, users])
 
   const available = useMemo(
     () => (childId ? tasks.filter((t) => isTaskAvailable(t, childId, submissions)) : []),
@@ -158,15 +158,15 @@ export function ChildHomePage() {
   const badges = useMemo(() => {
     if (!childId) return []
     const children = users.filter((u) => u.role === 'child' && u.isActive)
-    return computeBadges({ childId, submissions, transactions, children })
-  }, [childId, submissions, transactions, users])
+    return computeBadges({ childId, submissions, pointsTransactions, children })
+  }, [childId, submissions, pointsTransactions, users])
 
   if (!user || !childId || !streak || !level) return null
 
   const balance = computeBalance(transactions, childId)
   const points = computePoints(pointsTransactions, childId)
   const pending = submissions.filter((s) => s.childId === childId && s.status === 'pending')
-  const recent = transactions.filter((t) => t.childId === childId).slice(0, 5)
+  const recentPoints = pointsTransactions.filter((p) => p.childId === childId).slice(0, 5)
   const myGoals = savingsGoals.filter((g) => g.childId === childId)
   const topGoal = myGoals.length
     ? [...myGoals].sort((a, b) => a.targetAmount - balance - (b.targetAmount - balance))[0]
@@ -200,7 +200,11 @@ export function ChildHomePage() {
       >
         <ChildAvatar user={user} size="lg" onClick={() => setEditingAvatar(true)} />
         <p className="font-display text-lg font-bold">{user.name}</p>
-        <AnimatedBalance cents={balance} className="font-display text-6xl font-bold drop-shadow-sm" />
+        <AnimatedBalance
+          cents={points}
+          format={(n) => `${n} pts`}
+          className="font-display text-6xl font-bold drop-shadow-sm"
+        />
 
         <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
           <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
@@ -213,14 +217,11 @@ export function ChildHomePage() {
               {streak.count} jour{streak.count > 1 ? 's' : ''}
             </p>
           )}
-          {settings.features.shop && (
-            <Link
-              to="/enfant/boutique"
-              className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold"
-            >
-              <Sparkles size={15} aria-hidden />
-              {points} pts
-            </Link>
+          {balance !== 0 && (
+            <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
+              <Wallet size={15} aria-hidden />
+              {formatEuro(balance)}
+            </p>
           )}
         </div>
 
@@ -333,11 +334,16 @@ export function ChildHomePage() {
                   {task.description && (
                     <p className="truncate text-xs text-slate-500 dark:text-slate-400">{task.description}</p>
                   )}
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                      +{formatEuro(task.amount)}
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold text-violet-600 dark:text-violet-400">
+                      +{task.points} pts
                     </span>
                     <DifficultyDots level={task.difficulty} />
+                    {task.dailyLimit && task.dailyLimit > 1 && (
+                      <span className="text-xs font-semibold text-slate-400">
+                        {timesSubmittedToday(task, childId!, submissions)}/{task.dailyLimit} aujourd'hui
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Button variant="success" onClick={() => setConfirming(task)}>
@@ -376,14 +382,14 @@ export function ChildHomePage() {
         </section>
       )}
 
-      {recent.length > 0 && (
+      {recentPoints.length > 0 && (
         <section>
           <h2 className="mb-3 text-lg font-bold">Derniers gains</h2>
           <Card className="divide-y divide-slate-100 dark:divide-slate-800">
-            {recent.map((tx) => (
-              <div key={tx.id} className="flex items-center gap-3 px-4 py-3">
-                <p className="min-w-0 flex-1 truncate text-sm">{tx.description}</p>
-                <Amount cents={tx.amount} className="text-sm" />
+            {recentPoints.map((ptx) => (
+              <div key={ptx.id} className="flex items-center gap-3 px-4 py-3">
+                <p className="min-w-0 flex-1 truncate text-sm">{ptx.description}</p>
+                <PointsAmount points={ptx.amount} className="text-sm" />
               </div>
             ))}
           </Card>
@@ -396,7 +402,7 @@ export function ChildHomePage() {
         title={confirming ? `${confirming.icon} ${confirming.title}` : ''}
       >
         <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
-          Tu vas gagner <strong>+{formatEuro(confirming?.amount ?? 0)}</strong> dès qu'un parent aura vérifié.
+          Tu vas gagner <strong>+{confirming?.points ?? 0} points</strong> dès qu'un parent aura vérifié.
         </p>
 
         <div className="mb-4">
@@ -422,7 +428,7 @@ export function ChildHomePage() {
           <span className="text-sm">
             ⭐ Je l'ai fait <strong>sans qu'on me le demande</strong>
             <span className="block text-xs text-slate-500 dark:text-slate-400">
-              Bonus initiative : +{formatEuro(settings.initiativeBonus)}
+              Bonus initiative : +{settings.initiativeBonus} points
             </span>
           </span>
         </label>

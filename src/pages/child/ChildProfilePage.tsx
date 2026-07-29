@@ -1,5 +1,5 @@
 import { isSameMonth, isSameWeek, startOfWeek, subWeeks } from 'date-fns'
-import { LogOut } from 'lucide-react'
+import { LogOut, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { PhotoLightbox } from '../../components/photos/PhotoLightbox'
@@ -40,13 +40,13 @@ export function ChildProfilePage() {
     const approved = mine.filter((s) => s.status === 'approved').length
     const rejected = mine.filter((s) => s.status === 'rejected').length
     const reviewed = approved + rejected
-    const gains = transactions.filter((t) => t.childId === user.id && t.type === 'task_approval')
+    const gains = pointsTransactions.filter((p) => p.childId === user.id && p.type === 'task_approval')
     let bestWeek = 0
     for (let i = 0; i < 12; i++) {
       const weekStart = startOfWeek(subWeeks(Date.now(), i), WEEK)
       const total = gains
-        .filter((t) => isSameWeek(t.createdAt, weekStart, WEEK))
-        .reduce((sum, t) => sum + t.amount, 0)
+        .filter((p) => isSameWeek(p.createdAt, weekStart, WEEK))
+        .reduce((sum, p) => sum + p.amount, 0)
       bestWeek = Math.max(bestWeek, total)
     }
     return {
@@ -54,27 +54,27 @@ export function ChildProfilePage() {
       approvalRate: reviewed > 0 ? Math.round((approved / reviewed) * 100) : null,
       bestWeek,
     }
-  }, [user, submissions, transactions])
+  }, [user, submissions, pointsTransactions])
 
   const badges = useMemo(
     () =>
       user
-        ? computeBadges({ childId: user.id, submissions, transactions, children })
+        ? computeBadges({ childId: user.id, submissions, pointsTransactions, children })
         : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, submissions, transactions, users],
+    [user, submissions, pointsTransactions, users],
   )
 
   const rank = useMemo(() => {
     if (!user) return null
     const monthGains = (id: string) =>
-      transactions
-        .filter((t) => t.childId === id && t.type === 'task_approval' && isSameMonth(t.createdAt, Date.now()))
-        .reduce((sum, t) => sum + t.amount, 0)
+      pointsTransactions
+        .filter((p) => p.childId === id && p.type === 'task_approval' && isSameMonth(p.createdAt, Date.now()))
+        .reduce((sum, p) => sum + p.amount, 0)
     if (monthGains(user.id) === 0) return null
     const sorted = [...children].sort((a, b) => monthGains(b.id) - monthGains(a.id))
     return sorted.findIndex((c) => c.id === user.id) + 1
-  }, [user, children, transactions])
+  }, [user, children, pointsTransactions])
 
   const galleryPhotos = useMemo(() => {
     if (!user) return []
@@ -100,9 +100,16 @@ export function ChildProfilePage() {
         <ChildAvatar user={user} size="xl" onClick={() => setEditingAvatar(true)} />
         <p className="font-display text-xl font-bold">{user.name}</p>
         <AnimatedBalance
-          cents={computeBalance(transactions, user.id)}
+          cents={computePoints(pointsTransactions, user.id)}
+          format={(n) => `${n} pts`}
           className="font-display text-3xl font-bold"
         />
+        {computeBalance(transactions, user.id) !== 0 && (
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <Wallet size={14} aria-hidden />
+            {formatEuro(computeBalance(transactions, user.id))}
+          </p>
+        )}
         {settings.features.leaderboard && rank !== null && (
           <p className="rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
             {medals[rank - 1] ?? '🏅'} {rank === 1 ? 'MVP du mois !' : `${rank}ᵉ ce mois-ci`}
@@ -128,7 +135,7 @@ export function ChildProfilePage() {
           <p className="text-xs text-slate-500 dark:text-slate-400">Taux de réussite</p>
         </Card>
         <Card className="p-4 text-center">
-          <p className="font-display text-2xl font-bold">{formatEuro(stats.bestWeek)}</p>
+          <p className="font-display text-2xl font-bold">{stats.bestWeek} pts</p>
           <p className="text-xs text-slate-500 dark:text-slate-400">Meilleure semaine</p>
         </Card>
       </div>

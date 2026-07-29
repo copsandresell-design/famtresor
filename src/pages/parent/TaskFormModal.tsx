@@ -4,7 +4,6 @@ import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
 import { CATEGORIES, CATEGORY_KEYS, DIFFICULTIES, TASK_EMOJIS } from '../../lib/categories'
-import { centsToEuroInput, euroToCents } from '../../lib/format'
 import { DAYS_FR } from '../../lib/recurrence'
 import { useCurrentUser, useStore, type TaskInput } from '../../store/useStore'
 import type { Category, Difficulty, Frequency, Task } from '../../types'
@@ -24,7 +23,7 @@ export function TaskFormModal({ open, onClose, task }: Props) {
 
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
-  const [amount, setAmount] = useState(task ? centsToEuroInput(task.amount) : '1.50')
+  const [points, setPoints] = useState(task ? String(task.points) : '15')
   const [category, setCategory] = useState<Category>(task?.category ?? 'menage')
   const [icon, setIcon] = useState(task?.icon ?? '🧹')
   const [type, setType] = useState<Task['type']>(task?.type ?? 'recurrente')
@@ -36,6 +35,7 @@ export function TaskFormModal({ open, onClose, task }: Props) {
   const [dueDate, setDueDate] = useState(
     task?.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : '',
   )
+  const [dailyLimit, setDailyLimit] = useState(String(task?.dailyLimit ?? 1))
 
   if (!user) return null
 
@@ -44,16 +44,17 @@ export function TaskFormModal({ open, onClose, task }: Props) {
   }
 
   function submit() {
-    const cents = euroToCents(amount)
-    if (!title.trim() || cents <= 0 || assignedTo.length === 0) {
-      toast('Titre, montant positif et au moins un enfant sont requis.', 'error')
+    const pointsValue = parseInt(points, 10)
+    if (!title.trim() || !Number.isFinite(pointsValue) || pointsValue <= 0 || assignedTo.length === 0) {
+      toast('Titre, points positifs et au moins un enfant sont requis.', 'error')
       return
     }
+    const limit = Math.max(1, parseInt(dailyLimit, 10) || 1)
     const input: TaskInput = {
       id: task?.id,
       title: title.trim(),
       description: description.trim() || undefined,
-      amount: cents,
+      points: pointsValue,
       category,
       icon,
       type,
@@ -68,6 +69,7 @@ export function TaskFormModal({ open, onClose, task }: Props) {
       assignedTo,
       difficulty,
       dueDate: type === 'ponctuelle' && dueDate ? new Date(dueDate).getTime() : undefined,
+      dailyLimit: limit > 1 ? limit : undefined,
     }
     saveTask(input, user!.id)
     toast(task ? 'Tâche modifiée.' : 'Tâche créée.')
@@ -91,15 +93,15 @@ export function TaskFormModal({ open, onClose, task }: Props) {
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Montant (€) *">
+          <Field label="Points *">
             <input
               className={inputCls}
               type="number"
-              min="0.01"
-              step="0.01"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              min="1"
+              step="1"
+              inputMode="numeric"
+              value={points}
+              onChange={(e) => setPoints(e.target.value)}
             />
           </Field>
           <Field label="Catégorie">
@@ -116,6 +118,22 @@ export function TaskFormModal({ open, onClose, task }: Props) {
             </select>
           </Field>
         </div>
+
+        <Field label="Réalisable plusieurs fois par jour ?">
+          <input
+            className={inputCls}
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={dailyLimit}
+            onChange={(e) => setDailyLimit(e.target.value)}
+          />
+          <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+            1 = une fois par jour (par défaut). Au-delà, l'enfant peut la signaler plusieurs fois dans la
+            même journée, chaque validation rapportant à nouveau les points.
+          </span>
+        </Field>
 
         <Field label="Icône">
           <div className="flex flex-wrap gap-1.5">

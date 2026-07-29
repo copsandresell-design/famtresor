@@ -4,7 +4,14 @@ import { cn } from '../../lib/cn'
 import { prefersReducedMotion } from '../../lib/confetti'
 import { formatEuro } from '../../lib/format'
 
-export function AnimatedBalance({ cents, className }: { cents: number; className?: string }) {
+interface Props {
+  cents: number
+  className?: string
+  /** Personnalise l'affichage (ex : points bruts) — par défaut, formate en euros. */
+  format?: (value: number) => string
+}
+
+export function AnimatedBalance({ cents, className, format = formatEuro }: Props) {
   const [display, setDisplay] = useState(cents)
   const previous = useRef(cents)
 
@@ -24,5 +31,5 @@ export function AnimatedBalance({ cents, className }: { cents: number; className
     return () => controls.stop()
   }, [cents])
 
-  return <span className={cn('tabular-nums', className)}>{formatEuro(display)}</span>
+  return <span className={cn('tabular-nums', className)}>{format(display)}</span>
 }

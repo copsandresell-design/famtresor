@@ -7,18 +7,17 @@ import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { inputCls } from '../../components/ui/Field'
 import { CATEGORIES, CATEGORY_KEYS } from '../../lib/categories'
-import { formatEuro } from '../../lib/format'
 import { describeRecurrence } from '../../lib/recurrence'
 import { useStore } from '../../store/useStore'
 import type { Category, Task } from '../../types'
 import { TaskFormModal } from './TaskFormModal'
 
-type Sort = 'recent' | 'amount-desc' | 'amount-asc' | 'title'
+type Sort = 'recent' | 'points-desc' | 'points-asc' | 'title'
 
 const SORTS: Record<Sort, { label: string; compare: (a: Task, b: Task) => number }> = {
   recent: { label: 'Plus récentes', compare: (a, b) => b.createdAt - a.createdAt },
-  'amount-desc': { label: 'Montant ↓', compare: (a, b) => b.amount - a.amount },
-  'amount-asc': { label: 'Montant ↑', compare: (a, b) => a.amount - b.amount },
+  'points-desc': { label: 'Points ↓', compare: (a, b) => b.points - a.points },
+  'points-asc': { label: 'Points ↑', compare: (a, b) => a.points - b.points },
   title: { label: 'Titre A→Z', compare: (a, b) => a.title.localeCompare(b.title, 'fr') },
 }
 
@@ -159,9 +158,12 @@ export function TasksPage() {
                   .join(' + ')}
               </p>
             </div>
-            <span className="font-bold text-emerald-600 dark:text-emerald-400">
-              +{formatEuro(task.amount)}
+            <span className="font-bold text-violet-600 dark:text-violet-400">
+              +{task.points} pts
             </span>
+            {task.dailyLimit && task.dailyLimit > 1 && (
+              <Badge className="hidden shrink-0 sm:inline-flex">×{task.dailyLimit}/j</Badge>
+            )}
             <Pencil size={16} className="text-slate-400" />
           </button>
         ))}

@@ -177,7 +177,13 @@ interface Store {
   deleteSavingsGoal: (goalId: string, actorId: string) => void
 
   createShopItem: (
-    input: { title: string; icon: string; category: ShopCategory; cost: number },
+    input: { title: string; icon: string; category: ShopCategory; cost: number; stock?: number },
+    actorId: string,
+  ) => void
+  /** Modifie un lot existant — sert notamment à réapprovisionner (augmenter le stock). */
+  updateShopItem: (
+    itemId: string,
+    patch: Partial<{ title: string; icon: string; category: ShopCategory; cost: number; stock: number }>,
     actorId: string,
   ) => void
   deleteShopItem: (itemId: string, actorId: string) => void
@@ -345,10 +351,10 @@ export const useStore = create<Store>((set, get) => {
 
   /** Vérifie, pour chaque enfant, si de nouveaux badges ou paliers de série méritent des points — idempotent via rewardClaims. */
   function checkRewards(actorId: string) {
-    const { users, submissions, transactions } = get()
+    const { users, submissions, pointsTransactions } = get()
     const children = users.filter((u) => u.role === 'child' && u.isActive)
     for (const child of children) {
-      const badges = computeBadges({ childId: child.id, submissions, transactions, children })
+      const badges = computeBadges({ childId: child.id, submissions, pointsTransactions, children })
       for (const badge of badges) {
         if (!badge.unlocked || badge.points <= 0) continue
         const key = `badge:${badge.id}`
@@ -730,12 +736,12 @@ export const useStore = create<Store>((set, get) => {
         const before = get().tasks.find((t) => t.id === id)
         newlyAssigned = fields.assignedTo.filter((c) => !before?.assignedTo.includes(c))
         set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...fields } : t)) }))
-        pushLog('task_updated', actorId, `« ${fields.title} »`, undefined, fields.amount)
+        pushLog('task_updated', actorId, `« ${fields.title} » (${fields.points} pts)`)
       } else {
         const task: Task = { ...fields, id: uid(), createdBy: actorId, createdAt: Date.now(), isActive: true }
         newlyAssigned = task.assignedTo
         set((s) => ({ tasks: [task, ...s.tasks] }))
-        pushLog('task_created', actorId, `« ${task.title} »`, undefined, task.amount)
+        pushLog('task_created', actorId, `« ${task.title} » (${task.points} pts)`)
       }
       persist('tasks')
       for (const childId of newlyAssigned) {
@@ -743,7 +749,7 @@ export const useStore = create<Store>((set, get) => {
           childId,
           'task_assigned',
           'Nouvelle tâche pour toi !',
-          `${fields.title} · +${formatEuro(fields.amount)}`,
+          `${fields.title} · +${fields.points} points`,
           fields.icon,
           '/enfant',
         )
@@ -754,7 +760,7 @@ export const useStore = create<Store>((set, get) => {
       const task = get().tasks.find((t) => t.id === taskId)
       if (!task) return
       set((s) => ({ tasks: s.tasks.filter((t) => t.id !== taskId) }))
-      pushLog('task_deleted', actorId, `« ${task.title} »`, undefined, task.amount)
+      pushLog('task_deleted', actorId, `« ${task.title} »`)
       persist('tasks')
       deleteRecord('sync_tasks', taskId)
     },
@@ -780,7 +786,6 @@ export const useStore = create<Store>((set, get) => {
         childId,
         `« ${task.title} »${isInitiative ? ' ⭐ initiative' : ''}${photoIds?.length ? ` · ${photoIds.length} photo(s)` : ''}`,
         childId,
-        task.amount,
       )
       persist('submissions')
       const child = get().users.find((u) => u.id === childId)
@@ -812,12 +817,12 @@ export const useStore = create<Store>((set, get) => {
       const task = sub && tasks.find((t) => t.id === sub.taskId)
       if (!sub || !task || sub.status !== 'pending') return
       const bonus = sub.isInitiative ? settings.initiativeBonus : 0
-      const amount = task.amount + bonus
-      const transaction: Transaction = {
+      const points = task.points + bonus
+      const ptx: PointsTransaction = {
         id: uid(),
-        type: 'task_approval',
         childId: sub.childId,
-        amount,
+        type: 'task_approval',
+        amount: points,
         description: `${task.icon} ${task.title}${bonus > 0 ? ' ⭐ initiative' : ''}`,
         relatedTo: sub.id,
         createdBy: parentId,
@@ -829,16 +834,16 @@ export const useStore = create<Store>((set, get) => {
             ? { ...x, status: 'approved' as const, reviewedAt: Date.now(), reviewedBy: parentId, bonusApplied: bonus > 0 }
             : x,
         ),
-        transactions: [transaction, ...s.transactions],
+        pointsTransactions: [ptx, ...s.pointsTransactions],
       }))
-      pushLog('submission_approved', parentId, `« ${task.title} »`, sub.childId, amount, sub.id)
+      pushLog('submission_approved', parentId, `« ${task.title} » (+${points} pts)`, sub.childId, undefined, sub.id)
       persist('submissions')
-      persist('transactions')
+      persist('pointsTransactions')
       notify(
         sub.childId,
         'task_approved',
         'Tâche validée ! 🎉',
-        `${task.title} · +${formatEuro(amount)}${bonus > 0 ? ' (bonus initiative inclus)' : ''}`,
+        `${task.title} · +${points} points${bonus > 0 ? ' (bonus initiative inclus)' : ''}`,
         task.icon,
         '/enfant',
       )
@@ -846,24 +851,24 @@ export const useStore = create<Store>((set, get) => {
     },
 
     revertApproval: (submissionId, newStatus, parentId, reason) => {
-      const { submissions, tasks, transactions } = get()
+      const { submissions, tasks, pointsTransactions } = get()
       const sub = submissions.find((s) => s.id === submissionId)
       if (!sub || sub.status !== 'approved') return false
       const task = tasks.find((t) => t.id === sub.taskId)
-      const tx = transactions.find((t) => t.relatedTo === sub.id && t.type === 'task_approval')
-      if (tx) {
-        const reversal: Transaction = {
+      const ptx = pointsTransactions.find((p) => p.relatedTo === sub.id && p.type === 'task_approval')
+      if (ptx) {
+        const reversal: PointsTransaction = {
           id: uid(),
-          type: 'approval_reverted',
+          type: 'task_approval_reverted',
           childId: sub.childId,
-          amount: -tx.amount,
+          amount: -ptx.amount,
           description: `Annulation de validation — ${task?.title ?? 'tâche'}`,
-          relatedTo: tx.id,
+          relatedTo: ptx.id,
           createdBy: parentId,
           createdAt: Date.now(),
         }
-        set((s) => ({ transactions: [reversal, ...s.transactions] }))
-        persist('transactions')
+        set((s) => ({ pointsTransactions: [reversal, ...s.pointsTransactions] }))
+        persist('pointsTransactions')
       }
       set((s) => ({
         submissions: s.submissions.map((x) =>
@@ -884,9 +889,9 @@ export const useStore = create<Store>((set, get) => {
       pushLog(
         'submission_approval_reverted',
         parentId,
-        `« ${task?.title ?? '?'} » repassée ${statusLabel}`,
+        `« ${task?.title ?? '?'} » repassée ${statusLabel}${ptx ? ` (-${ptx.amount} pts)` : ''}`,
         sub.childId,
-        tx ? -tx.amount : undefined,
+        undefined,
         sub.id,
       )
       notify(
@@ -1122,12 +1127,25 @@ export const useStore = create<Store>((set, get) => {
         icon: input.icon,
         category: input.category,
         cost: input.cost,
+        stock: input.stock,
         status: 'active',
         createdBy: actorId,
         createdAt: Date.now(),
       }
       set((s) => ({ shopItems: [item, ...s.shopItems] }))
-      pushLog('shop_item_created', actorId, `« ${trimmed} » (${input.cost} pts)`)
+      pushLog(
+        'shop_item_created',
+        actorId,
+        `« ${trimmed} » (${input.cost} pts${input.stock !== undefined ? `, stock ${input.stock}` : ''})`,
+      )
+      persist('shopItems')
+    },
+
+    updateShopItem: (itemId, patch, actorId) => {
+      const item = get().shopItems.find((i) => i.id === itemId)
+      if (!item) return
+      set((s) => ({ shopItems: s.shopItems.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) }))
+      pushLog('shop_item_updated', actorId, `« ${patch.title ?? item.title} »`)
       persist('shopItems')
     },
 
@@ -1208,10 +1226,20 @@ export const useStore = create<Store>((set, get) => {
     redeemShopItem: (childId, itemId, actorId) => {
       const item = get().shopItems.find((i) => i.id === itemId)
       if (!item || item.status !== 'active' || item.cost === undefined) return false
+      if (item.stock !== undefined && item.stock <= 0) {
+        get().toast('Ce lot est épuisé.', 'error')
+        return false
+      }
       const balance = computePoints(get().pointsTransactions, childId)
       if (balance < item.cost) {
         get().toast('Pas assez de points pour ce lot.', 'error')
         return false
+      }
+      if (item.stock !== undefined) {
+        set((s) => ({
+          shopItems: s.shopItems.map((i) => (i.id === itemId ? { ...i, stock: (i.stock ?? 0) - 1 } : i)),
+        }))
+        persist('shopItems')
       }
       const redemption: Redemption = {
         id: uid(),
@@ -1270,6 +1298,13 @@ export const useStore = create<Store>((set, get) => {
       set((s) => ({
         redemptions: s.redemptions.map((r) => (r.id === redemptionId ? { ...r, status: 'cancelled' as const } : r)),
       }))
+      const item = get().shopItems.find((i) => i.id === red.itemId)
+      if (item && item.stock !== undefined) {
+        set((s) => ({
+          shopItems: s.shopItems.map((i) => (i.id === red.itemId ? { ...i, stock: (i.stock ?? 0) + 1 } : i)),
+        }))
+        persist('shopItems')
+      }
       const refund: PointsTransaction = {
         id: uid(),
         childId: red.childId,
