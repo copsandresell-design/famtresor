@@ -1,4 +1,4 @@
-import { AlertTriangle, Pencil, Trash2, Undo2 } from 'lucide-react'
+import { AlertTriangle, Pencil, Plus, Repeat, Trash2, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import { Amount } from '../../components/ui/Amount'
 import { Badge } from '../../components/ui/Badge'
@@ -9,9 +9,148 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
+import { Switch } from '../../components/ui/Switch'
 import { centsToEuroInput, euroToCents, formatDateTime, formatEuro } from '../../lib/format'
+import { DAYS_FR } from '../../lib/recurrence'
 import { PENALTY_CANCEL_WINDOW, useCurrentUser, useStore } from '../../store/useStore'
-import type { Transaction } from '../../types'
+import type { Frequency, PenaltyRule, Transaction } from '../../types'
+
+/** Fréquences pertinentes pour une règle sans historique de soumissions (pas de notion "2×/semaine" ici). */
+const RULE_FREQUENCIES: { value: Frequency; label: string }[] = [
+  { value: 'daily', label: 'Chaque jour' },
+  { value: 'weekly', label: 'Chaque semaine' },
+  { value: 'monthly', label: 'Chaque mois' },
+]
+
+function describeRuleRecurrence(rule: PenaltyRule): string {
+  switch (rule.recurrence.frequency) {
+    case 'daily':
+      return 'Chaque jour'
+    case 'weekly':
+      return `Chaque ${DAYS_FR[rule.recurrence.dayOfWeek ?? 0]}`
+    case 'monthly':
+      return `Le ${rule.recurrence.dayOfMonth ?? 1} du mois`
+    default:
+      return ''
+  }
+}
+
+function PenaltyRuleModal({
+  rule,
+  defaultChildId,
+  onClose,
+}: {
+  rule: PenaltyRule | null
+  defaultChildId: string
+  onClose: () => void
+}) {
+  const user = useCurrentUser()
+  const children = useStore((s) => s.users).filter((u) => u.role === 'child' && u.isActive)
+  const savePenaltyRule = useStore((s) => s.savePenaltyRule)
+  const toast = useStore((s) => s.toast)
+
+  const [childId, setChildId] = useState(rule?.childId ?? defaultChildId)
+  const [title, setTitle] = useState(rule?.title ?? '')
+  const [amount, setAmount] = useState(rule ? centsToEuroInput(rule.amount) : '1.00')
+  const [frequency, setFrequency] = useState<Frequency>(rule?.recurrence.frequency ?? 'weekly')
+  const [dayOfWeek, setDayOfWeek] = useState(rule?.recurrence.dayOfWeek ?? 6)
+  const [dayOfMonth, setDayOfMonth] = useState(rule?.recurrence.dayOfMonth ?? 1)
+
+  if (!user) return null
+  const cents = euroToCents(amount)
+  const valid = title.trim() && cents > 0 && childId
+
+  function submit() {
+    savePenaltyRule(
+      {
+        id: rule?.id,
+        childId,
+        title: title.trim(),
+        amount: cents,
+        recurrence: {
+          frequency,
+          dayOfWeek: frequency === 'weekly' ? dayOfWeek : undefined,
+          dayOfMonth: frequency === 'monthly' ? dayOfMonth : undefined,
+        },
+        active: rule?.active ?? true,
+      },
+      user!.id,
+    )
+    toast(rule ? 'Règle modifiée.' : 'Règle créée.')
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title={rule ? 'Modifier la règle' : 'Nouvelle règle de pénalité'}>
+      <div className="space-y-4">
+        <Field label="Enfant">
+          <select className={inputCls} value={childId} onChange={(e) => setChildId(e.target.value)}>
+            {children.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.avatar} {c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Titre *">
+          <input
+            className={inputCls}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="ex : Chambre pas rangée"
+            autoFocus
+          />
+        </Field>
+        <Field label="Montant (€)">
+          <input
+            className={inputCls}
+            type="number"
+            min="0.01"
+            step="0.01"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </Field>
+        <Field label="Fréquence">
+          <select className={inputCls} value={frequency} onChange={(e) => setFrequency(e.target.value as Frequency)}>
+            {RULE_FREQUENCIES.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {frequency === 'weekly' && (
+          <Field label="Quel jour ?">
+            <select className={inputCls} value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>
+              {DAYS_FR.map((day, i) => (
+                <option key={day} value={i}>
+                  {day}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {frequency === 'monthly' && (
+          <Field label="Quel jour du mois ? (1–28)">
+            <input
+              className={inputCls}
+              type="number"
+              min={1}
+              max={28}
+              value={dayOfMonth}
+              onChange={(e) => setDayOfMonth(Math.min(28, Math.max(1, Number(e.target.value))))}
+            />
+          </Field>
+        )}
+        <Button className="w-full" disabled={!valid} onClick={submit}>
+          {rule ? 'Enregistrer' : 'Créer la règle'}
+        </Button>
+      </div>
+    </Modal>
+  )
+}
 
 function EditPenaltyModal({
   tx,
@@ -81,9 +220,13 @@ export function PenaltiesPage() {
   const children = useStore((s) => s.users).filter((u) => u.role === 'child' && u.isActive)
   const users = useStore((s) => s.users)
   const transactions = useStore((s) => s.transactions)
+  const settings = useStore((s) => s.settings)
+  const penaltyRules = useStore((s) => s.penaltyRules)
   const applyPenalty = useStore((s) => s.applyPenalty)
   const cancelPenalty = useStore((s) => s.cancelPenalty)
   const deletePenaltyTransaction = useStore((s) => s.deletePenaltyTransaction)
+  const savePenaltyRule = useStore((s) => s.savePenaltyRule)
+  const deletePenaltyRule = useStore((s) => s.deletePenaltyRule)
   const toast = useStore((s) => s.toast)
 
   const [childId, setChildId] = useState(children[0]?.id ?? '')
@@ -93,6 +236,8 @@ export function PenaltiesPage() {
   const [confirming, setConfirming] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
+  const [editingRule, setEditingRule] = useState<PenaltyRule | 'new' | null>(null)
+  const [deletingRule, setDeletingRule] = useState<PenaltyRule | null>(null)
 
   if (!user) return null
 
@@ -164,6 +309,60 @@ export function PenaltiesPage() {
           </Button>
         </div>
       </Card>
+
+      {settings.features.recurringPenalties && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <Repeat size={18} className="text-slate-400" />
+              Règles récurrentes
+            </h2>
+            <Button variant="soft" size="sm" onClick={() => setEditingRule('new')}>
+              <Plus size={16} />
+              Nouvelle règle
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {penaltyRules.map((rule) => {
+              const ruleChild = users.find((u) => u.id === rule.childId)
+              return (
+                <Card key={rule.id} className="flex items-center gap-3 p-4">
+                  {ruleChild && <ChildAvatar user={ruleChild} size="sm" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold">{rule.title}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{describeRuleRecurrence(rule)}</p>
+                  </div>
+                  <span className="text-sm font-bold text-rose-600 dark:text-rose-400">
+                    -{formatEuro(rule.amount)}
+                  </span>
+                  <Switch
+                    checked={rule.active}
+                    onChange={(active) => savePenaltyRule({ ...rule, active }, user.id)}
+                    label={rule.active ? 'Désactiver' : 'Activer'}
+                  />
+                  <button
+                    onClick={() => setEditingRule(rule)}
+                    aria-label="Modifier la règle"
+                    className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={() => setDeletingRule(rule)}
+                    aria-label="Supprimer la règle"
+                    className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-950/40"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </Card>
+              )
+            })}
+            {penaltyRules.length === 0 && (
+              <EmptyState emoji="🔁" text="Aucune règle récurrente. Ex : chambre pas rangée le dimanche soir." />
+            )}
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="mb-3 text-lg font-bold">Historique des pénalités</h2>
@@ -246,6 +445,29 @@ export function PenaltiesPage() {
           if (deleting && user) {
             deletePenaltyTransaction(deleting.id, user.id)
             toast('Pénalité supprimée.')
+          }
+        }}
+      />
+
+      {editingRule && (
+        <PenaltyRuleModal
+          rule={editingRule === 'new' ? null : editingRule}
+          defaultChildId={childId}
+          onClose={() => setEditingRule(null)}
+        />
+      )}
+
+      <ConfirmModal
+        open={deletingRule !== null}
+        onClose={() => setDeletingRule(null)}
+        title="Supprimer la règle"
+        message={`« ${deletingRule?.title} » ne s'appliquera plus automatiquement.`}
+        confirmLabel="Oui, supprimer"
+        danger
+        onConfirm={() => {
+          if (deletingRule && user) {
+            deletePenaltyRule(deletingRule.id, user.id)
+            toast('Règle supprimée.')
           }
         }}
       />
