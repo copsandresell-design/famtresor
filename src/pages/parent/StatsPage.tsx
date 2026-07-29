@@ -22,6 +22,8 @@ import { computeBalance } from '../../lib/balance'
 import { CATEGORIES } from '../../lib/categories'
 import { childGradient } from '../../lib/colors'
 import { formatDateShort, formatEuro } from '../../lib/format'
+import { computeLifetimePoints } from '../../lib/points'
+import { computeRank } from '../../lib/ranks'
 import { useStore } from '../../store/useStore'
 
 const WEEK = { weekStartsOn: 1 as const }
@@ -37,6 +39,7 @@ export function StatsPage() {
   const pointsTransactions = useStore((s) => s.pointsTransactions)
   const submissions = useStore((s) => s.submissions)
   const tasks = useStore((s) => s.tasks)
+  const rankDefs = useStore((s) => s.rankDefs)
 
   const children = users.filter((u) => u.role === 'child' && u.isActive)
   const now = Date.now()
@@ -142,6 +145,8 @@ export function StatsPage() {
         <div className="grid gap-3 sm:grid-cols-2">
           {ranking.map((entry, i) => {
             const winner = i === 0 && entry.monthGains > 0
+            const rank =
+              rankDefs.length > 0 ? computeRank(computeLifetimePoints(pointsTransactions, entry.child.id), rankDefs) : null
             return (
               <Card
                 key={entry.child.id}
@@ -155,11 +160,19 @@ export function StatsPage() {
                 <span className="text-3xl" aria-hidden>
                   {medals[i] ?? '🏅'}
                 </span>
-                <ChildAvatar user={entry.child} size="md" />
+                <ChildAvatar user={entry.child} size="md" decoration={rank?.rank.emoji} />
                 <div className="min-w-0 flex-1">
-                  <p className="font-display font-bold">
+                  <p className="flex flex-wrap items-center gap-1.5 font-display font-bold">
                     {entry.child.name}
                     {winner && ' — MVP du mois 👑'}
+                    {rank && (
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
+                        style={{ backgroundColor: rank.rank.color }}
+                      >
+                        {rank.rank.label}
+                      </span>
+                    )}
                   </p>
                   <p className={winner ? 'text-sm text-white/85' : 'text-sm text-slate-500 dark:text-slate-400'}>
                     {entry.monthGains} pts ce mois-ci

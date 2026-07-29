@@ -288,7 +288,7 @@ export function ChildHomePage() {
         className="flex flex-col items-center gap-2 rounded-3xl p-7 text-center text-white shadow-lg"
         style={{ background: childGradient(user.color) }}
       >
-        <ChildAvatar user={user} size="lg" onClick={() => setEditingAvatar(true)} />
+        <ChildAvatar user={user} size="lg" decoration={rank?.rank.emoji} onClick={() => setEditingAvatar(true)} />
         <p className="font-display text-lg font-bold">{user.name}</p>
         <AnimatedBalance
           cents={points}

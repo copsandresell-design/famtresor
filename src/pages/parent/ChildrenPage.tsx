@@ -14,7 +14,8 @@ import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
 import { computeBalance } from '../../lib/balance'
-import { computePoints } from '../../lib/points'
+import { computeLifetimePoints, computePoints } from '../../lib/points'
+import { computeRank } from '../../lib/ranks'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { User } from '../../types'
 
@@ -106,6 +107,7 @@ export function ChildrenPage() {
   const users = useStore((s) => s.users)
   const transactions = useStore((s) => s.transactions)
   const pointsTransactions = useStore((s) => s.pointsTransactions)
+  const rankDefs = useStore((s) => s.rankDefs)
   const updateChild = useStore((s) => s.updateChild)
   const resetBalance = useStore((s) => s.resetBalance)
   const toast = useStore((s) => s.toast)
@@ -122,10 +124,12 @@ export function ChildrenPage() {
       <h1 className="text-2xl font-black">Enfants</h1>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {children.map((child) => (
+        {children.map((child) => {
+          const rank = rankDefs.length > 0 ? computeRank(computeLifetimePoints(pointsTransactions, child.id), rankDefs) : null
+          return (
           <Card key={child.id} className={cn('p-5', !child.isActive && 'opacity-60')}>
             <div className="flex items-center gap-4">
-              <ChildAvatar user={child} size="lg" />
+              <ChildAvatar user={child} size="lg" decoration={rank?.rank.emoji} />
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 font-bold">
                   {child.name}
@@ -169,7 +173,8 @@ export function ChildrenPage() {
               </Button>
             </div>
           </Card>
-        ))}
+          )
+        })}
       </div>
 
       {editing && <EditChildModal child={editing} onClose={() => setEditing(null)} />}

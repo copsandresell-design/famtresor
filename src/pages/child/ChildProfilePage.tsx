@@ -122,7 +122,7 @@ export function ChildProfilePage() {
       <h1 className="text-2xl font-black">Mon profil</h1>
 
       <Card className="flex flex-col items-center gap-3 p-6">
-        <ChildAvatar user={user} size="xl" onClick={() => setEditingAvatar(true)} />
+        <ChildAvatar user={user} size="xl" decoration={lifetimeRank?.rank.emoji} onClick={() => setEditingAvatar(true)} />
         <p className="font-display text-xl font-bold">{user.name}</p>
         <AnimatedBalance
           cents={computePoints(pointsTransactions, user.id)}

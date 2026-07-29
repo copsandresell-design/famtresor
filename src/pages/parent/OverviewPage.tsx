@@ -12,24 +12,36 @@ import { ChildAvatar } from '../../components/ui/ChildAvatar'
 import { PointsAmount } from '../../components/ui/PointsAmount'
 import { computeBalance } from '../../lib/balance'
 import { formatRelative } from '../../lib/format'
+import { computeLifetimePoints } from '../../lib/points'
+import { computeRank } from '../../lib/ranks'
+import { computeStreakDefCount } from '../../lib/streak'
 import { useStore } from '../../store/useStore'
-import type { PointsTransaction, User } from '../../types'
+import type { PointsTransaction, RankDef, StreakDef, TaskSubmission, Transaction, User } from '../../types'
 
 const WEEK = { weekStartsOn: 1 as const }
 const MEDALS = ['🥇', '🥈', '🥉']
 
 /** Classement des enfants par points gagnés (tâches) ce mois — visible seulement si activé dans Réglages. */
-function LeaderboardCard({ children: kids, pointsTransactions }: { children: User[]; pointsTransactions: PointsTransaction[] }) {
+function LeaderboardCard({
+  children: kids,
+  pointsTransactions,
+  rankDefs,
+}: {
+  children: User[]
+  pointsTransactions: PointsTransaction[]
+  rankDefs: RankDef[]
+}) {
   const ranked = useMemo(() => {
     return kids
       .map((child) => {
         const monthGains = pointsTransactions
           .filter((p) => p.childId === child.id && p.type === 'task_approval' && isSameMonth(p.createdAt, Date.now()))
           .reduce((sum, p) => sum + p.amount, 0)
-        return { child, monthGains }
+        const rank = rankDefs.length > 0 ? computeRank(computeLifetimePoints(pointsTransactions, child.id), rankDefs) : null
+        return { child, monthGains, rank }
       })
       .sort((a, b) => b.monthGains - a.monthGains)
-  }, [kids, pointsTransactions])
+  }, [kids, pointsTransactions, rankDefs])
 
   if (ranked.length === 0) return null
 
@@ -40,7 +52,7 @@ function LeaderboardCard({ children: kids, pointsTransactions }: { children: Use
         Classement du mois
       </h2>
       <div className="space-y-2">
-        {ranked.map(({ child, monthGains }, i) => (
+        {ranked.map(({ child, monthGains, rank }, i) => (
           <div
             key={child.id}
             className="flex items-center gap-3 rounded-xl px-2 py-2 first:bg-amber-50 first:dark:bg-amber-950/30"
@@ -48,11 +60,75 @@ function LeaderboardCard({ children: kids, pointsTransactions }: { children: Use
             <span className="w-6 shrink-0 text-center text-lg" aria-hidden>
               {MEDALS[i] ?? `${i + 1}.`}
             </span>
-            <ChildAvatar user={child} size="sm" />
+            <ChildAvatar user={child} size="sm" decoration={rank?.rank.emoji} />
             <p className="min-w-0 flex-1 truncate text-sm font-semibold">{child.name}</p>
+            {rank && (
+              <span
+                className="hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-white sm:inline-block"
+                style={{ backgroundColor: rank.rank.color }}
+                title={rank.rank.label}
+              >
+                {rank.rank.label}
+              </span>
+            )}
             <span className="text-sm font-bold text-violet-600 dark:text-violet-400">
               {monthGains > 0 ? `${monthGains} pts` : '—'}
             </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+/** Fiche récap hebdomadaire par enfant : points gagnés, tâches faites, séries en cours (voir demande point 5). */
+function WeeklyRecapCard({
+  children: kids,
+  pointsTransactions,
+  submissions,
+  transactions,
+  streakDefs,
+}: {
+  children: User[]
+  pointsTransactions: PointsTransaction[]
+  submissions: TaskSubmission[]
+  transactions: Transaction[]
+  streakDefs: StreakDef[]
+}) {
+  const recaps = useMemo(() => {
+    const now = new Date()
+    return kids.map((child) => {
+      const weekPoints = pointsTransactions
+        .filter((p) => p.childId === child.id && p.amount > 0 && isSameWeek(p.createdAt, Date.now(), WEEK))
+        .reduce((sum, p) => sum + p.amount, 0)
+      const weekTasks = submissions.filter(
+        (s) => s.childId === child.id && s.status === 'approved' && s.reviewedAt && isSameWeek(s.reviewedAt, Date.now(), WEEK),
+      ).length
+      const streaks = streakDefs
+        .filter((d) => d.isActive)
+        .map((d) => computeStreakDefCount(d, child.id, { submissions, transactions, now }))
+        .filter((count) => count > 0)
+      const bestStreak = Math.max(0, ...streaks)
+      return { child, weekPoints, weekTasks, activeStreaks: streaks.length, bestStreak }
+    })
+  }, [kids, pointsTransactions, submissions, transactions, streakDefs])
+
+  if (recaps.length === 0) return null
+
+  return (
+    <Card className="p-5">
+      <h2 className="mb-4 text-lg font-bold">Récap de la semaine</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {recaps.map(({ child, weekPoints, weekTasks, activeStreaks, bestStreak }) => (
+          <div key={child.id} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 dark:border-slate-800">
+            <ChildAvatar user={child} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{child.name}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {weekPoints} pts · {weekTasks} tâche{weekTasks > 1 ? 's' : ''}
+                {activeStreaks > 0 && ` · 🔥 ${bestStreak}j (${activeStreaks} série${activeStreaks > 1 ? 's' : ''})`}
+              </p>
+            </div>
           </div>
         ))}
       </div>
@@ -197,6 +273,8 @@ export function OverviewPage() {
   const transactions = useStore((s) => s.transactions)
   const pointsTransactions = useStore((s) => s.pointsTransactions)
   const submissions = useStore((s) => s.submissions)
+  const streakDefs = useStore((s) => s.streakDefs)
+  const rankDefs = useStore((s) => s.rankDefs)
   const settings = useStore((s) => s.settings)
   const navigate = useNavigate()
 
@@ -267,7 +345,17 @@ export function OverviewPage() {
       )}
 
       {settings.features.leaderboard && children.length > 0 && (
-        <LeaderboardCard children={children} pointsTransactions={pointsTransactions} />
+        <LeaderboardCard children={children} pointsTransactions={pointsTransactions} rankDefs={rankDefs} />
+      )}
+
+      {children.length > 0 && (
+        <WeeklyRecapCard
+          children={children}
+          pointsTransactions={pointsTransactions}
+          submissions={submissions}
+          transactions={transactions}
+          streakDefs={streakDefs}
+        />
       )}
 
       <div>

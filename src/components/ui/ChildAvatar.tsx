@@ -5,10 +5,10 @@ import { useProfilePhotos } from '../../hooks/useProfilePhotos'
 import type { User } from '../../types'
 
 const sizes = {
-  sm: { outer: 'h-9 w-9', text: 'text-base' },
-  md: { outer: 'h-12 w-12', text: 'text-xl' },
-  lg: { outer: 'h-[4.5rem] w-[4.5rem]', text: 'text-3xl' },
-  xl: { outer: 'h-28 w-28', text: 'text-5xl' },
+  sm: { outer: 'h-9 w-9', text: 'text-base', badge: 'h-3.5 w-3.5 text-[9px]' },
+  md: { outer: 'h-12 w-12', text: 'text-xl', badge: 'h-4.5 w-4.5 text-[10px]' },
+  lg: { outer: 'h-[4.5rem] w-[4.5rem]', text: 'text-3xl', badge: 'h-6 w-6 text-sm' },
+  xl: { outer: 'h-28 w-28', text: 'text-5xl', badge: 'h-8 w-8 text-lg' },
 }
 
 interface Props {
@@ -16,9 +16,11 @@ interface Props {
   size?: keyof typeof sizes
   /** Si fourni, l'avatar devient cliquable (ex : ouvrir l'édition de photo). */
   onClick?: () => void
+  /** Médaillon (ex : emoji du rang actuel) — décor qui évolue avec la progression de l'enfant. */
+  decoration?: string
 }
 
-export function ChildAvatar({ user, size = 'md', onClick }: Props) {
+export function ChildAvatar({ user, size = 'md', onClick, decoration }: Props) {
   const localPhotoUrl = usePhotoUrl(user.photoId, 'thumb')
   const { photos: supabasePhotos } = useProfilePhotos()
 
@@ -26,21 +28,32 @@ export function ChildAvatar({ user, size = 'md', onClick }: Props) {
   const photoUrl = supabasePhotos[user.name] || localPhotoUrl
 
   const visual = (
-    <span
-      aria-hidden
-      className={cn('inline-flex shrink-0 rounded-full p-[3px]', sizes[size].outer)}
-      style={{ background: childGradient(user.color) }}
-    >
-      {photoUrl ? (
-        <img src={photoUrl} alt="" className="h-full w-full rounded-full object-cover" />
-      ) : (
+    <span aria-hidden className="relative inline-flex shrink-0">
+      <span
+        className={cn('inline-flex shrink-0 rounded-full p-[3px]', sizes[size].outer)}
+        style={{ background: childGradient(user.color) }}
+      >
+        {photoUrl ? (
+          <img src={photoUrl} alt="" className="h-full w-full rounded-full object-cover" />
+        ) : (
+          <span
+            className={cn(
+              'flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-slate-900',
+              sizes[size].text,
+            )}
+          >
+            {user.avatar}
+          </span>
+        )}
+      </span>
+      {decoration && (
         <span
           className={cn(
-            'flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-slate-900',
-            sizes[size].text,
+            'absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-white shadow ring-2 ring-white dark:bg-slate-900 dark:ring-slate-900',
+            sizes[size].badge,
           )}
         >
-          {user.avatar}
+          {decoration}
         </span>
       )}
     </span>
