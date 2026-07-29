@@ -1,0 +1,266 @@
+// Fonction serverless Vercel (cron quotidien, voir vercel.json) : applique les pénalités
+// d'inactivité et les règles de pénalité récurrentes, puis notifie (push) parents et enfant
+// concerné. Auto-contenue (pas d'import depuis src/) — même logique que api/send-push.ts.
+//
+// Idempotence : une pénalité automatique n'est appliquée qu'une fois par jour et par
+// enfant/règle, via la table sync_automation_log (clé unique 'inactivity:<childId>:<date>'
+// ou 'penaltyRule:<ruleId>:<date>').
+import { createClient } from '@supabase/supabase-js'
+
+const SUPABASE_URL = process.env.SUPABASE_URL || ''
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
+const CRON_SECRET = process.env.CRON_SECRET || ''
+
+interface User {
+  id: string
+  role: 'parent' | 'child'
+  name: string
+  isActive: boolean
+  createdAt: number
+}
+
+interface TaskSubmission {
+  id: string
+  childId: string
+  status: 'pending' | 'approved' | 'rejected'
+  submittedAt: number
+  reviewedAt?: number
+}
+
+interface Recurrence {
+  frequency: 'daily' | 'twice-weekly' | 'weekly' | 'monthly'
+  dayOfWeek?: number
+  dayOfMonth?: number
+}
+
+interface PenaltyRule {
+  id: string
+  childId: string
+  title: string
+  amount: number
+  recurrence: Recurrence
+  active: boolean
+}
+
+interface InactivityPenaltySettings {
+  thresholdDays: number
+  baseAmountCents: number
+  baseAmountPoints: number
+  applyMoney: boolean
+  applyPoints: boolean
+  severityMultiplier: number
+}
+
+interface Settings {
+  features: { inactivityPenalties: boolean; recurringPenalties: boolean }
+  inactivityPenalty: InactivityPenaltySettings
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const uid = () => crypto.randomUUID()
+const todayKey = () => new Date().toISOString().slice(0, 10)
+
+/** Index du jour avec 0 = lundi … 6 = dimanche (même convention que src/lib/recurrence.ts). */
+function mondayIndex(date: Date): number {
+  return (date.getDay() + 6) % 7
+}
+
+export default async function handler(req: any, res: any) {
+  if (CRON_SECRET) {
+    const auth = req.headers?.authorization || req.headers?.Authorization
+    if (auth !== `Bearer ${CRON_SECRET}`) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+  }
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.error('check-inactivity: configuration Supabase manquante')
+    res.status(500).json({ error: 'Configuration Supabase manquante côté serveur' })
+    return
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+  const now = new Date()
+  const today = todayKey()
+
+  async function readTable<T>(table: string): Promise<T[]> {
+    const { data, error } = await supabase.from(table).select('id, data')
+    if (error) {
+      console.error(`check-inactivity: lecture ${table} échouée`, error.message)
+      return []
+    }
+    return (data ?? []).map((row: any) => row.data as T)
+  }
+
+  async function alreadyRan(key: string): Promise<boolean> {
+    const { data } = await supabase.from('sync_automation_log').select('id').eq('data->>key', key).limit(1)
+    return !!data && data.length > 0
+  }
+
+  async function markRan(key: string): Promise<void> {
+    const id = uid()
+    await supabase.from('sync_automation_log').insert({ id, data: { id, key, createdAt: Date.now() } })
+  }
+
+  async function pushLog(entry: {
+    action: string
+    actorId: string
+    subjectId?: string
+    relatedId?: string
+    amount?: number
+    details: string
+  }) {
+    const row = { id: uid(), ...entry, timestamp: Date.now() }
+    await supabase.from('sync_logs').upsert({ id: row.id, data: row, updated_at: new Date().toISOString() })
+  }
+
+  async function insertTransaction(childId: string, amount: number, description: string) {
+    const tx = {
+      id: uid(),
+      type: 'penalty',
+      childId,
+      amount: -Math.abs(amount),
+      description,
+      createdBy: 'system',
+      createdAt: Date.now(),
+    }
+    await supabase.from('sync_transactions').upsert({ id: tx.id, data: tx, updated_at: new Date().toISOString() })
+    return tx
+  }
+
+  async function insertPointsTransaction(childId: string, amount: number, description: string) {
+    const ptx = {
+      id: uid(),
+      childId,
+      type: 'manual_adjustment',
+      amount: -Math.abs(amount),
+      description,
+      createdBy: 'system',
+      createdAt: Date.now(),
+    }
+    await supabase
+      .from('sync_points_transactions')
+      .upsert({ id: ptx.id, data: ptx, updated_at: new Date().toISOString() })
+  }
+
+  async function sendPush(userId: string, title: string, body: string, icon: string, link: string) {
+    try {
+      const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : ''
+      if (!base) return
+      await fetch(`${base}/api/send-push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, title, body, icon, link }),
+      })
+    } catch (err) {
+      console.error('check-inactivity: push échoué', err)
+    }
+  }
+
+  const settingsRows = await readTable<Settings>('sync_settings')
+  const settings = settingsRows[0]
+  if (!settings) {
+    res.status(200).json({ skipped: true, reason: 'no-settings' })
+    return
+  }
+
+  const results = { inactivityApplied: 0, ruleApplied: 0 }
+
+  if (settings.features.inactivityPenalties || settings.features.recurringPenalties) {
+    const users = await readTable<User>('sync_users')
+    const parents = users.filter((u) => u.role === 'parent' && u.isActive)
+    const children = users.filter((u) => u.role === 'child' && u.isActive)
+
+    // --- Pénalités d'inactivité ---
+    if (settings.features.inactivityPenalties) {
+      const submissions = await readTable<TaskSubmission>('sync_submissions')
+      const cfg = settings.inactivityPenalty
+
+      for (const child of children) {
+        const approvedDates = submissions
+          .filter((s) => s.childId === child.id && s.status === 'approved' && s.reviewedAt)
+          .map((s) => s.reviewedAt!)
+        const lastActivity = approvedDates.length > 0 ? Math.max(...approvedDates) : child.createdAt
+        const daysSince = Math.floor((now.getTime() - lastActivity) / DAY_MS)
+
+        if (daysSince >= cfg.thresholdDays) {
+          const extraDays = daysSince - cfg.thresholdDays + 1
+          const key = `inactivity:${child.id}:${today}`
+          if (await alreadyRan(key)) continue
+
+          const amountMoney = cfg.applyMoney ? Math.round(cfg.baseAmountCents * extraDays * cfg.severityMultiplier) : 0
+          const amountPoints = cfg.applyPoints
+            ? Math.round(cfg.baseAmountPoints * extraDays * cfg.severityMultiplier)
+            : 0
+          if (amountMoney <= 0 && amountPoints <= 0) continue
+
+          const description = `⚠️ ${extraDays} jour${extraDays > 1 ? 's' : ''} d'inactivité — pénalité automatique`
+          let tx: { id: string; amount: number } | null = null
+          if (amountMoney > 0) tx = await insertTransaction(child.id, amountMoney, description)
+          if (amountPoints > 0) await insertPointsTransaction(child.id, amountPoints, description)
+
+          await pushLog({
+            action: 'inactivity_penalty_applied',
+            actorId: 'system',
+            subjectId: child.id,
+            relatedId: tx?.id,
+            amount: tx ? tx.amount : undefined,
+            details: description,
+          })
+          await markRan(key)
+          results.inactivityApplied++
+
+          const body = `${child.name} : ${description}${amountMoney > 0 ? ` (${(amountMoney / 100).toFixed(2)} €)` : ''}`
+          await sendPush(child.id, 'Pénalité d’inactivité', description, '⚠️', '/enfant/historique')
+          for (const parent of parents) {
+            await sendPush(parent.id, 'Pénalité d’inactivité appliquée', body, '⚠️', '/parent/penalites')
+          }
+        }
+      }
+    }
+
+    // --- Règles de pénalité récurrentes ---
+    if (settings.features.recurringPenalties) {
+      const rules = (await readTable<PenaltyRule>('sync_penalty_rules')).filter((r) => r.active)
+
+      for (const rule of rules) {
+        const due =
+          rule.recurrence.frequency === 'daily' ||
+          (rule.recurrence.frequency === 'weekly' && mondayIndex(now) === (rule.recurrence.dayOfWeek ?? 0)) ||
+          (rule.recurrence.frequency === 'monthly' && now.getDate() === (rule.recurrence.dayOfMonth ?? 1))
+        if (!due) continue
+
+        const key = `penaltyRule:${rule.id}:${today}`
+        if (await alreadyRan(key)) continue
+
+        const description = `⚠️ ${rule.title} (règle automatique)`
+        const tx = await insertTransaction(rule.childId, rule.amount, description)
+        await pushLog({
+          action: 'penalty_rule_auto_applied',
+          actorId: 'system',
+          subjectId: rule.childId,
+          relatedId: tx.id,
+          amount: tx.amount,
+          details: description,
+        })
+        await markRan(key)
+        results.ruleApplied++
+
+        const child = children.find((c) => c.id === rule.childId)
+        await sendPush(rule.childId, 'Pénalité appliquée', description, '⚠️', '/enfant/historique')
+        for (const parent of parents) {
+          await sendPush(
+            parent.id,
+            'Règle de pénalité appliquée',
+            `${child?.name ?? 'Un enfant'} : ${rule.title}`,
+            '⚠️',
+            '/parent/penalites',
+          )
+        }
+      }
+    }
+  }
+
+  res.status(200).json({ ok: true, ...results })
+}

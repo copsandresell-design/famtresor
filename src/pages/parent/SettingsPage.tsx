@@ -50,6 +50,11 @@ export function SettingsPage() {
   const [minBalance, setMinBalance] = useState(centsToEuroInput(settings.minBalance))
   const [password, setPassword] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
+  const [pointsPerEuro, setPointsPerEuro] = useState(String(settings.pointsPerEuro))
+  const [thresholdDays, setThresholdDays] = useState(String(settings.inactivityPenalty.thresholdDays))
+  const [baseAmount, setBaseAmount] = useState(centsToEuroInput(settings.inactivityPenalty.baseAmountCents))
+  const [baseAmountPoints, setBaseAmountPoints] = useState(String(settings.inactivityPenalty.baseAmountPoints))
+  const [severityMultiplier, setSeverityMultiplier] = useState(String(settings.inactivityPenalty.severityMultiplier))
 
   if (!user) return null
 
@@ -63,6 +68,27 @@ export function SettingsPage() {
       user!.id,
     )
     toast('Réglages enregistrés.')
+  }
+
+  function savePointsSettings() {
+    updateSettings({ pointsPerEuro: Math.max(1, parseInt(pointsPerEuro, 10) || settings.pointsPerEuro) }, user!.id)
+    toast('Taux de conversion enregistré.')
+  }
+
+  function saveInactivitySettings() {
+    updateSettings(
+      {
+        inactivityPenalty: {
+          ...settings.inactivityPenalty,
+          thresholdDays: Math.max(1, parseInt(thresholdDays, 10) || 1),
+          baseAmountCents: Math.max(0, euroToCents(baseAmount)),
+          baseAmountPoints: Math.max(0, parseInt(baseAmountPoints, 10) || 0),
+          severityMultiplier: Math.max(0.1, parseFloat(severityMultiplier.replace(',', '.')) || 1),
+        },
+      },
+      user!.id,
+    )
+    toast('Réglages des pénalités automatiques enregistrés.')
   }
 
   async function savePassword() {
@@ -155,6 +181,158 @@ export function SettingsPage() {
             </div>
           ))}
         </div>
+      </Card>
+
+      <Card className="space-y-4 p-5">
+        <div>
+          <h2 className="font-bold">Points & pénalités automatiques</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Taux de conversion de la boutique, et pénalités appliquées automatiquement.
+          </p>
+        </div>
+
+        <Field label="Taux de conversion (points pour 1 €)">
+          <input
+            className={inputCls}
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={pointsPerEuro}
+            onChange={(e) => setPointsPerEuro(e.target.value)}
+          />
+        </Field>
+        <div className="flex justify-end">
+          <Button variant="soft" onClick={savePointsSettings}>
+            Enregistrer le taux
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <span className="text-xl" aria-hidden>
+            🔁
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Pénalités récurrentes</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Autorise la création de règles de pénalité automatiques (page Pénalités), ex : chambre pas
+              rangée le dimanche soir.
+            </p>
+          </div>
+          <Switch
+            checked={settings.features.recurringPenalties}
+            onChange={(checked) =>
+              updateSettings({ features: { ...settings.features, recurringPenalties: checked } }, user.id)
+            }
+            label="Pénalités récurrentes"
+          />
+        </div>
+
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <span className="text-xl" aria-hidden>
+            😴
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Pénalités d'inactivité</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Pénalité automatique (une fois par jour, via une tâche planifiée) si un enfant n'a validé
+              aucune tâche depuis trop longtemps. S'aggrave avec le temps.
+            </p>
+          </div>
+          <Switch
+            checked={settings.features.inactivityPenalties}
+            onChange={(checked) =>
+              updateSettings({ features: { ...settings.features, inactivityPenalties: checked } }, user.id)
+            }
+            label="Pénalités d'inactivité"
+          />
+        </div>
+
+        {settings.features.inactivityPenalties && (
+          <div className="space-y-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+            <Field label="Déclencher après (jours sans tâche validée)">
+              <input
+                className={inputCls}
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                value={thresholdDays}
+                onChange={(e) => setThresholdDays(e.target.value)}
+              />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Montant de base (€)">
+                <input
+                  className={inputCls}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={baseAmount}
+                  onChange={(e) => setBaseAmount(e.target.value)}
+                />
+              </Field>
+              <Field label="Montant de base (points)">
+                <input
+                  className={inputCls}
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={baseAmountPoints}
+                  onChange={(e) => setBaseAmountPoints(e.target.value)}
+                />
+              </Field>
+            </div>
+            <Field label="Multiplicateur d'aggravation (jour 1 = base × mult, jour 2 = 2 × base × mult…)">
+              <input
+                className={inputCls}
+                type="number"
+                min="0.1"
+                step="0.1"
+                inputMode="decimal"
+                value={severityMultiplier}
+                onChange={(e) => setSeverityMultiplier(e.target.value)}
+              />
+            </Field>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.inactivityPenalty.applyMoney}
+                  onChange={(e) =>
+                    updateSettings(
+                      { inactivityPenalty: { ...settings.inactivityPenalty, applyMoney: e.target.checked } },
+                      user.id,
+                    )
+                  }
+                  className="h-4 w-4 accent-amber-500"
+                />
+                En argent
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.inactivityPenalty.applyPoints}
+                  onChange={(e) =>
+                    updateSettings(
+                      { inactivityPenalty: { ...settings.inactivityPenalty, applyPoints: e.target.checked } },
+                      user.id,
+                    )
+                  }
+                  className="h-4 w-4 accent-amber-500"
+                />
+                En points
+              </label>
+            </div>
+            <div className="flex justify-end">
+              <Button variant="soft" onClick={saveInactivitySettings}>
+                Enregistrer
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <PushNotificationsCard userId={user.id} />
