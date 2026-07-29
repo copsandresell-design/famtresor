@@ -188,7 +188,7 @@ interface Store {
   ) => void
   deleteShopItem: (itemId: string, actorId: string) => void
   proposeWish: (childId: string, title: string, icon: string, category: ShopCategory) => void
-  approveWish: (itemId: string, cost: number, actorId: string) => void
+  approveWish: (itemId: string, cost: number, actorId: string, stock?: number) => void
   rejectWish: (itemId: string, actorId: string) => void
   redeemShopItem: (childId: string, itemId: string, actorId: string) => boolean
   fulfillRedemption: (redemptionId: string, actorId: string) => void
@@ -1184,11 +1184,11 @@ export const useStore = create<Store>((set, get) => {
       )
     },
 
-    approveWish: (itemId, cost, actorId) => {
+    approveWish: (itemId, cost, actorId, stock) => {
       const item = get().shopItems.find((i) => i.id === itemId)
       if (!item || item.status !== 'proposed' || cost <= 0) return
       set((s) => ({
-        shopItems: s.shopItems.map((i) => (i.id === itemId ? { ...i, status: 'active' as const, cost } : i)),
+        shopItems: s.shopItems.map((i) => (i.id === itemId ? { ...i, status: 'active' as const, cost, stock } : i)),
       }))
       pushLog('wish_approved', actorId, `« ${item.title} » ajouté à la boutique (${cost} pts)`, item.proposedBy)
       persist('shopItems')
