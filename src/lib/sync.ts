@@ -18,6 +18,9 @@ export type SyncTable =
   | 'sync_penalty_rules'
   | 'sync_shop_items'
   | 'sync_redemptions'
+  | 'sync_streak_defs'
+  | 'sync_badge_defs'
+  | 'sync_rank_defs'
 
 export async function fetchAll<T>(table: SyncTable): Promise<T[]> {
   const { data, error } = await supabase.from(table).select('id, data')
