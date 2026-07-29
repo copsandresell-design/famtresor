@@ -1,7 +1,7 @@
 import { format, isSameDay, isSameMonth, isSameWeek, isToday, subDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { motion } from 'framer-motion'
-import { BellRing, CheckCircle2, Plus, ShieldAlert, TrendingUp, Trophy } from 'lucide-react'
+import { BellRing, CheckCircle2, Plus, ShieldAlert, Sparkles, Trophy, Wallet } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Amount } from '../../components/ui/Amount'
@@ -11,8 +11,8 @@ import { Card } from '../../components/ui/Card'
 import { ChildAvatar } from '../../components/ui/ChildAvatar'
 import { PointsAmount } from '../../components/ui/PointsAmount'
 import { computeBalance } from '../../lib/balance'
-import { formatRelative } from '../../lib/format'
-import { computeLifetimePoints } from '../../lib/points'
+import { formatEuro, formatRelative } from '../../lib/format'
+import { computeLifetimePoints, computePoints } from '../../lib/points'
 import { computeRank } from '../../lib/ranks'
 import { computeStreakDefCount } from '../../lib/streak'
 import { useStore } from '../../store/useStore'
@@ -315,16 +315,13 @@ export function OverviewPage() {
       )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Card className="border-0 bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-white shadow-md shadow-amber-500/25">
-          <p className="text-xs font-semibold text-white/85">Solde famille</p>
-          <AnimatedBalance cents={familyTotal} className="font-display text-2xl font-bold" />
+        <Card className="border-0 bg-gradient-to-br from-violet-500 to-blue-500 p-4 text-white shadow-md shadow-violet-500/25">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-white/85">
+            <Sparkles size={14} aria-hidden />
+            Points cette semaine
+          </p>
+          <AnimatedBalance cents={weekPoints} format={(n) => `${n} pts`} className="font-display text-2xl font-bold" />
         </Card>
-        <KpiCard
-          icon={<TrendingUp size={20} />}
-          iconCls="bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400"
-          label="Points cette semaine"
-          value={<span className="text-violet-600 dark:text-violet-400">{weekPoints} pts</span>}
-        />
         <KpiCard
           icon={<CheckCircle2 size={20} />}
           iconCls="bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400"
@@ -337,6 +334,12 @@ export function OverviewPage() {
           label="En attente"
           value={<span className="text-amber-600 dark:text-amber-400">{pending.length}</span>}
           to="/parent/validations"
+        />
+        <KpiCard
+          icon={<Wallet size={20} />}
+          iconCls="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+          label="Solde famille"
+          value={<span className="text-base">{formatEuro(familyTotal)}</span>}
         />
       </div>
 
@@ -363,6 +366,7 @@ export function OverviewPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           {children.map((child) => {
             const balance = computeBalance(transactions, child.id)
+            const points = computePoints(pointsTransactions, child.id)
             const childPending = pending.filter((s) => s.childId === child.id).length
             const weekApproved = submissions.filter(
               (s) =>
@@ -381,7 +385,14 @@ export function OverviewPage() {
                   <ChildAvatar user={child} size="lg" />
                   <div className="min-w-0 flex-1">
                     <p className="font-bold">{child.name}</p>
-                    <AnimatedBalance cents={balance} className="text-xl font-black" />
+                    <AnimatedBalance
+                      cents={points}
+                      format={(n) => `${n} pts`}
+                      className="text-xl font-black text-violet-600 dark:text-violet-400"
+                    />
+                    {balance !== 0 && (
+                      <p className="text-xs font-semibold text-slate-400">{formatEuro(balance)}</p>
+                    )}
                   </div>
                   <Sparkline childId={child.id} color={child.color} />
                 </div>
