@@ -181,15 +181,18 @@ export function ChildShopPage() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         {catalogue.map((item) => {
-          const canAfford = item.cost !== undefined && points >= item.cost
+          const outOfStock = item.stock === 0
+          const canAfford = item.cost !== undefined && points >= item.cost && !outOfStock
           return (
-            <Card key={item.id} className="flex items-center gap-3 p-4">
+            <Card key={item.id} className={cn('flex items-center gap-3 p-4', outOfStock && 'opacity-60')}>
               <span className="text-3xl" aria-hidden>
                 {item.icon}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold">{item.title}</p>
-                <p className="text-xs font-semibold text-violet-600 dark:text-violet-400">{item.cost} pts</p>
+                <p className="text-xs font-semibold text-violet-600 dark:text-violet-400">
+                  {outOfStock ? 'Épuisé' : `${item.cost} pts`}
+                </p>
               </div>
               <Button
                 size="sm"
@@ -203,7 +206,7 @@ export function ChildShopPage() {
                   }
                 }}
               >
-                Échanger
+                {outOfStock ? 'Épuisé' : 'Échanger'}
               </Button>
             </Card>
           )

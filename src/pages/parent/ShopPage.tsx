@@ -1,4 +1,4 @@
-import { Check, Plus, Trash2, X } from 'lucide-react'
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -15,6 +15,43 @@ import { SHOP_CATEGORIES, SHOP_CATEGORY_KEYS, SHOP_EXAMPLES, SHOP_ICON_LIBRARY }
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { ShopCategory, ShopItem } from '../../types'
 
+/** true = illimité (case cochée), false = quantité précise saisie à côté. */
+function StockField({
+  stock,
+  onChange,
+}: {
+  stock: string
+  onChange: (value: string) => void
+}) {
+  const unlimited = stock === ''
+  return (
+    <Field label="Stock disponible">
+      <div className="flex items-center gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={unlimited}
+            onChange={(e) => onChange(e.target.checked ? '' : '5')}
+            className="h-4 w-4 accent-amber-500"
+          />
+          Illimité
+        </label>
+        {!unlimited && (
+          <input
+            className={inputCls}
+            type="number"
+            min="0"
+            step="1"
+            inputMode="numeric"
+            value={stock}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        )}
+      </div>
+    </Field>
+  )
+}
+
 function CreateItemModal({ onClose }: { onClose: () => void }) {
   const user = useCurrentUser()
   const createShopItem = useStore((s) => s.createShopItem)
@@ -23,6 +60,7 @@ function CreateItemModal({ onClose }: { onClose: () => void }) {
   const [category, setCategory] = useState<ShopCategory>('cinema')
   const [icon, setIcon] = useState(SHOP_ICON_LIBRARY.cinema[0])
   const [cost, setCost] = useState('50')
+  const [stock, setStock] = useState('')
 
   if (!user) return null
 
@@ -38,7 +76,8 @@ function CreateItemModal({ onClose }: { onClose: () => void }) {
       toast('Titre et coût en points valides requis.', 'error')
       return
     }
-    createShopItem({ title: title.trim(), icon, category, cost: points }, user!.id)
+    const stockValue = stock === '' ? undefined : Math.max(0, parseInt(stock, 10) || 0)
+    createShopItem({ title: title.trim(), icon, category, cost: points, stock: stockValue }, user!.id)
     toast('Lot ajouté à la boutique !')
     onClose()
   }
@@ -115,8 +154,59 @@ function CreateItemModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setCost(e.target.value)}
           />
         </Field>
+        <StockField stock={stock} onChange={setStock} />
         <Button className="w-full" onClick={submit}>
           Ajouter à la boutique
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+function EditItemModal({ item, onClose }: { item: ShopItem; onClose: () => void }) {
+  const user = useCurrentUser()
+  const updateShopItem = useStore((s) => s.updateShopItem)
+  const toast = useStore((s) => s.toast)
+  const [cost, setCost] = useState(String(item.cost ?? 0))
+  const [stock, setStock] = useState(item.stock === undefined ? '' : String(item.stock))
+
+  if (!user) return null
+
+  function submit() {
+    const points = parseInt(cost, 10)
+    if (!Number.isFinite(points) || points <= 0) {
+      toast('Coût en points invalide.', 'error')
+      return
+    }
+    const stockValue = stock === '' ? undefined : Math.max(0, parseInt(stock, 10) || 0)
+    updateShopItem(item.id, { cost: points, stock: stockValue }, user!.id)
+    toast('Lot mis à jour.')
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Modifier « ${item.title} »`}>
+      <div className="space-y-4">
+        <Field label="Coût en points *">
+          <input
+            className={inputCls}
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            autoFocus
+          />
+        </Field>
+        <StockField stock={stock} onChange={setStock} />
+        {item.stock === 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Ce lot est actuellement épuisé — augmente le stock pour le remettre en vente.
+          </p>
+        )}
+        <Button className="w-full" onClick={submit}>
+          Enregistrer
         </Button>
       </div>
     </Modal>
@@ -128,6 +218,7 @@ function ApproveWishModal({ item, onClose }: { item: ShopItem; onClose: () => vo
   const approveWish = useStore((s) => s.approveWish)
   const toast = useStore((s) => s.toast)
   const [cost, setCost] = useState('50')
+  const [stock, setStock] = useState('')
 
   if (!user) return null
 
@@ -137,7 +228,8 @@ function ApproveWishModal({ item, onClose }: { item: ShopItem; onClose: () => vo
       toast('Coût en points invalide.', 'error')
       return
     }
-    approveWish(item.id, points, user!.id)
+    const stockValue = stock === '' ? undefined : Math.max(0, parseInt(stock, 10) || 0)
+    approveWish(item.id, points, user!.id, stockValue)
     toast('Vœu accepté et ajouté à la boutique !')
     onClose()
   }
@@ -158,6 +250,7 @@ function ApproveWishModal({ item, onClose }: { item: ShopItem; onClose: () => vo
             autoFocus
           />
         </Field>
+        <StockField stock={stock} onChange={setStock} />
         <Button className="w-full" onClick={submit}>
           Ajouter à la boutique
         </Button>
@@ -179,6 +272,7 @@ export function ShopPage() {
 
   const [tab, setTab] = useState<'catalogue' | 'voeux' | 'echanges'>('catalogue')
   const [creating, setCreating] = useState(false)
+  const [editingItem, setEditingItem] = useState<ShopItem | null>(null)
   const [approvingWish, setApprovingWish] = useState<ShopItem | null>(null)
   const [deletingItem, setDeletingItem] = useState<ShopItem | null>(null)
 
@@ -213,25 +307,42 @@ export function ShopPage() {
 
       {tab === 'catalogue' && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {catalogue.map((item) => (
-            <Card key={item.id} className="flex items-center gap-3 p-4">
-              <span className="text-3xl" aria-hidden>
-                {item.icon}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-bold">{item.title}</p>
-                <Badge>{SHOP_CATEGORIES[item.category].label}</Badge>
-              </div>
-              <span className="font-bold text-violet-600 dark:text-violet-400">{item.cost} pts</span>
-              <button
-                onClick={() => setDeletingItem(item)}
-                aria-label="Retirer ce lot"
-                className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-950/40"
-              >
-                <Trash2 size={16} />
-              </button>
-            </Card>
-          ))}
+          {catalogue.map((item) => {
+            const outOfStock = item.stock === 0
+            return (
+              <Card key={item.id} className={cn('flex items-center gap-3 p-4', outOfStock && 'opacity-60')}>
+                <span className="text-3xl" aria-hidden>
+                  {item.icon}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold">{item.title}</p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                    <Badge>{SHOP_CATEGORIES[item.category].label}</Badge>
+                    {outOfStock ? (
+                      <Badge tone="red">Épuisé</Badge>
+                    ) : (
+                      item.stock !== undefined && <Badge tone="amber">Stock : {item.stock}</Badge>
+                    )}
+                  </div>
+                </div>
+                <span className="font-bold text-violet-600 dark:text-violet-400">{item.cost} pts</span>
+                <button
+                  onClick={() => setEditingItem(item)}
+                  aria-label="Modifier ce lot"
+                  className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={() => setDeletingItem(item)}
+                  aria-label="Retirer ce lot"
+                  className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-950/40"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </Card>
+            )
+          })}
           {catalogue.length === 0 && <EmptyState emoji="🎁" text="Aucun lot pour l'instant. Ajoutes-en un !" />}
         </div>
       )}
@@ -340,6 +451,7 @@ export function ShopPage() {
       )}
 
       {creating && <CreateItemModal onClose={() => setCreating(false)} />}
+      {editingItem && <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} />}
       {approvingWish && <ApproveWishModal item={approvingWish} onClose={() => setApprovingWish(null)} />}
 
       <ConfirmModal
