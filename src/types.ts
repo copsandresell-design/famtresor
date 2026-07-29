@@ -7,6 +7,7 @@ export type Frequency = 'daily' | 'twice-weekly' | 'weekly' | 'monthly'
 export type TaskType = 'ponctuelle' | 'recurrente'
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected'
 export type TransactionType =
+  /** Historique uniquement : avant la bascule tâches → points, valider une tâche créditait de l'argent. */
   | 'task_approval'
   | 'penalty'
   | 'penalty_cancel'
@@ -42,7 +43,8 @@ export interface Task {
   id: string
   title: string
   description?: string
-  amount: number
+  /** Récompense en points (monnaie de la Boutique) — valider une tâche ne donne plus d'argent directement. */
+  points: number
   category: Category
   icon: string
   type: TaskType
@@ -50,6 +52,8 @@ export interface Task {
   assignedTo: string[]
   difficulty: Difficulty
   dueDate?: number
+  /** Nombre de fois soumissible/validable par jour. undefined ou 1 = comportement historique (une fois). */
+  dailyLimit?: number
   createdBy: string
   createdAt: number
   isActive: boolean
@@ -126,6 +130,7 @@ export interface InactivityPenaltySettings {
 
 export interface Settings {
   familyName: string
+  /** Bonus (en points) pour une tâche faite sans qu'on le demande. */
   initiativeBonus: number
   minBalance: number
   theme: Theme
@@ -166,8 +171,10 @@ export type NotificationType =
   | 'redemption_requested'
   | 'redemption_fulfilled'
 
-/** Monnaie séparée de l'argent : gagnée via badges/séries, dépensée dans la Boutique. */
+/** Monnaie séparée de l'argent : gagnée via tâches/badges/séries, dépensée dans la Boutique. */
 export type PointsTransactionType =
+  | 'task_approval'
+  | 'task_approval_reverted'
   | 'badge'
   | 'streak_bonus'
   | 'shop_redeem'
@@ -220,6 +227,8 @@ export interface ShopItem {
   category: ShopCategory
   cost?: number
   status: ShopItemStatus
+  /** Quantité disponible. undefined = illimité. 0 = épuisé (le parent réapprovisionne en augmentant ce nombre). */
+  stock?: number
   proposedBy?: string
   createdBy: string
   createdAt: number

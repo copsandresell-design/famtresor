@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isTaskAvailable } from './recurrence'
+import { isTaskAvailable, timesSubmittedToday } from './recurrence'
 import type { Task, TaskSubmission } from '../types'
 
 const CHILD = 'child-1'
@@ -8,7 +8,7 @@ function makeTask(partial: Partial<Task>): Task {
   return {
     id: 'task-1',
     title: 'Test',
-    amount: 150,
+    points: 15,
     category: 'menage',
     icon: '🧹',
     type: 'recurrente',
@@ -78,5 +78,33 @@ describe('isTaskAvailable', () => {
     expect(isTaskAvailable(task, CHILD, [], new Date('2026-07-10T10:00:00'))).toBe(false)
     expect(isTaskAvailable(task, CHILD, [], NOW)).toBe(true)
     expect(isTaskAvailable(task, CHILD, [makeSub(new Date('2026-07-16T10:00:00'))], NOW)).toBe(false)
+  })
+
+  it('dailyLimit : autorise plusieurs fois par jour jusqu’à la limite', () => {
+    const task = makeTask({ recurrence: { frequency: 'daily' }, dailyLimit: 3 })
+    const twice = [
+      makeSub(new Date('2026-07-22T08:00:00')),
+      makeSub(new Date('2026-07-22T09:00:00')),
+    ]
+    expect(isTaskAvailable(task, CHILD, twice, NOW)).toBe(true)
+    const thrice = [...twice, makeSub(new Date('2026-07-22T09:30:00'))]
+    expect(isTaskAvailable(task, CHILD, thrice, NOW)).toBe(false)
+  })
+
+  it('dailyLimit absent ou 1 : comportement historique inchangé', () => {
+    const task = makeTask({ recurrence: { frequency: 'daily' } })
+    expect(isTaskAvailable(task, CHILD, [makeSub(new Date('2026-07-22T08:00:00'))], NOW)).toBe(false)
+  })
+})
+
+describe('timesSubmittedToday', () => {
+  it('compte les soumissions actives du jour, ignore les refus et les autres jours', () => {
+    const task = makeTask({ recurrence: { frequency: 'daily' } })
+    const subs = [
+      makeSub(new Date('2026-07-22T08:00:00')),
+      makeSub(new Date('2026-07-22T09:00:00'), 'rejected'),
+      makeSub(new Date('2026-07-21T08:00:00')),
+    ]
+    expect(timesSubmittedToday(task, CHILD, subs, NOW)).toBe(1)
   })
 })

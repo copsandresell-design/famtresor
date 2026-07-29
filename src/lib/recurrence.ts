@@ -16,13 +16,23 @@ function activeSubmissions(task: Task, childId: string, submissions: TaskSubmiss
   )
 }
 
+/** Combien de fois cette tâche a déjà été signalée aujourd'hui (hors refus, qui redonnent leur chance). */
+export function timesSubmittedToday(
+  task: Task,
+  childId: string,
+  submissions: TaskSubmission[],
+  now: Date = new Date(),
+): number {
+  return activeSubmissions(task, childId, submissions).filter((s) => isSameDay(s.submittedAt, now)).length
+}
+
 /**
  * Une tâche est disponible si l'enfant peut la signaler maintenant :
  * - ponctuelle : jamais signalée (hors refus, qui redonne sa chance)
- * - quotidienne : pas encore signalée aujourd'hui
- * - 2×/semaine : moins de 2 fois cette semaine
- * - hebdomadaire : à partir de son jour, une fois par semaine
- * - mensuelle : à partir de son jour, une fois par mois
+ * - quotidienne : moins de `dailyLimit` fois aujourd'hui (défaut 1)
+ * - 2×/semaine : moins de 2 fois cette semaine, ET moins de `dailyLimit` fois aujourd'hui
+ * - hebdomadaire : à partir de son jour, une fois par semaine, ET moins de `dailyLimit` fois aujourd'hui
+ * - mensuelle : à partir de son jour, une fois par mois, ET moins de `dailyLimit` fois aujourd'hui
  */
 export function isTaskAvailable(
   task: Task,
@@ -37,20 +47,25 @@ export function isTaskAvailable(
 
   const r = task.recurrence
   if (!r) return false
+  const dailyLimit = task.dailyLimit ?? 1
+  const underDailyLimit = timesSubmittedToday(task, childId, submissions, now) < dailyLimit
+
   switch (r.frequency) {
     case 'daily':
-      return !mine.some((s) => isSameDay(s.submittedAt, now))
+      return underDailyLimit
     case 'twice-weekly':
-      return mine.filter((s) => isSameWeek(s.submittedAt, now, WEEK)).length < 2
+      return mine.filter((s) => isSameWeek(s.submittedAt, now, WEEK)).length < 2 && underDailyLimit
     case 'weekly':
       return (
         mondayIndex(now) >= (r.dayOfWeek ?? 0) &&
-        !mine.some((s) => isSameWeek(s.submittedAt, now, WEEK))
+        !mine.some((s) => isSameWeek(s.submittedAt, now, WEEK)) &&
+        underDailyLimit
       )
     case 'monthly':
       return (
         getDate(now) >= (r.dayOfMonth ?? 1) &&
-        !mine.some((s) => isSameMonth(s.submittedAt, now))
+        !mine.some((s) => isSameMonth(s.submittedAt, now)) &&
+        underDailyLimit
       )
   }
 }

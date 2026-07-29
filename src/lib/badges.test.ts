@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeBadges } from './badges'
-import type { TaskSubmission, Transaction, User } from '../types'
+import type { PointsTransaction, TaskSubmission, User } from '../types'
 
 const CHILD = 'child-1'
 const OTHER = 'child-2'
@@ -27,23 +27,23 @@ function approvedSub(dateIso: string, opts?: Partial<TaskSubmission>): TaskSubmi
   }
 }
 
-function gain(childId: string, amount: number, dateIso: string): Transaction {
+function gain(childId: string, points: number, dateIso: string): PointsTransaction {
   return {
-    id: `tx-${++seq}`,
+    id: `ptx-${++seq}`,
     type: 'task_approval',
     childId,
-    amount,
+    amount: points,
     description: 'test',
     createdBy: 'parent-1',
     createdAt: new Date(dateIso).getTime(),
   }
 }
 
-function badge(id: string, ctx: { submissions?: TaskSubmission[]; transactions?: Transaction[] }) {
+function badge(id: string, ctx: { submissions?: TaskSubmission[]; pointsTransactions?: PointsTransaction[] }) {
   return computeBadges({
     childId: CHILD,
     submissions: ctx.submissions ?? [],
-    transactions: ctx.transactions ?? [],
+    pointsTransactions: ctx.pointsTransactions ?? [],
     children,
     now: NOW,
   }).find((b) => b.id === id)!
@@ -74,17 +74,17 @@ describe('computeBadges', () => {
     expect(badge('initiative-master', { submissions: subs }).unlocked).toBe(true)
   })
 
-  it('MVP du mois : meilleur gain du mois, jamais à 0 €', () => {
+  it('MVP du mois : meilleur gain du mois, jamais à 0 point', () => {
     expect(badge('month-mvp', {}).unlocked).toBe(false)
-    const txs = [gain(CHILD, 500, '2026-07-10T10:00:00'), gain(OTHER, 300, '2026-07-11T10:00:00')]
-    expect(badge('month-mvp', { transactions: txs }).unlocked).toBe(true)
-    const behind = [gain(CHILD, 200, '2026-07-10T10:00:00'), gain(OTHER, 300, '2026-07-11T10:00:00')]
-    expect(badge('month-mvp', { transactions: behind }).unlocked).toBe(false)
+    const ptxs = [gain(CHILD, 50, '2026-07-10T10:00:00'), gain(OTHER, 30, '2026-07-11T10:00:00')]
+    expect(badge('month-mvp', { pointsTransactions: ptxs }).unlocked).toBe(true)
+    const behind = [gain(CHILD, 20, '2026-07-10T10:00:00'), gain(OTHER, 30, '2026-07-11T10:00:00')]
+    expect(badge('month-mvp', { pointsTransactions: behind }).unlocked).toBe(false)
   })
 
-  it('teamplayer : gains cumulés de la fratrie sur le mois', () => {
-    const txs = [gain(CHILD, 1500, '2026-07-10T10:00:00'), gain(OTHER, 1000, '2026-07-11T10:00:00')]
-    expect(badge('teamplayer', { transactions: txs }).unlocked).toBe(true)
-    expect(badge('teamplayer', { transactions: txs.slice(0, 1) }).unlocked).toBe(false)
+  it('teamplayer : points cumulés de la fratrie sur le mois (seuil 400)', () => {
+    const ptxs = [gain(CHILD, 250, '2026-07-10T10:00:00'), gain(OTHER, 200, '2026-07-11T10:00:00')]
+    expect(badge('teamplayer', { pointsTransactions: ptxs }).unlocked).toBe(true)
+    expect(badge('teamplayer', { pointsTransactions: ptxs.slice(0, 1) }).unlocked).toBe(false)
   })
 })

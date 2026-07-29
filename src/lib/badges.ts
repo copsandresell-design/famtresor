@@ -1,6 +1,6 @@
 import { isSameMonth, isSameWeek, startOfWeek, subWeeks } from 'date-fns'
 import { computeStreak } from './streak'
-import type { TaskSubmission, Transaction, User } from '../types'
+import type { PointsTransaction, TaskSubmission, User } from '../types'
 
 const WEEK = { weekStartsOn: 1 as const }
 const HOUR = 60 * 60 * 1000
@@ -33,17 +33,23 @@ export const BADGE_POINTS: Record<string, number> = {
 interface BadgeContext {
   childId: string
   submissions: TaskSubmission[]
-  transactions: Transaction[]
+  pointsTransactions: PointsTransaction[]
   children: User[]
   now?: Date
 }
 
-export function computeBadges({ childId, submissions, transactions, children, now = new Date() }: BadgeContext): BadgeState[] {
+export function computeBadges({
+  childId,
+  submissions,
+  pointsTransactions,
+  children,
+  now = new Date(),
+}: BadgeContext): BadgeState[] {
   const mine = submissions.filter((s) => s.childId === childId)
   const approved = mine.filter((s) => s.status === 'approved')
-  const gains = transactions.filter((t) => t.type === 'task_approval')
-  const earnedOf = (id: string, filter?: (t: Transaction) => boolean) =>
-    gains.filter((t) => t.childId === id && (!filter || filter(t))).reduce((sum, t) => sum + t.amount, 0)
+  const gains = pointsTransactions.filter((p) => p.type === 'task_approval')
+  const earnedOf = (id: string, filter?: (p: PointsTransaction) => boolean) =>
+    gains.filter((p) => p.childId === id && (!filter || filter(p))).reduce((sum, p) => sum + p.amount, 0)
 
   const earned = earnedOf(childId)
   const monthEarned = earnedOf(childId, (t) => isSameMonth(t.createdAt, now))
@@ -103,9 +109,9 @@ export function computeBadges({ childId, submissions, transactions, children, no
       id: 'golden-week',
       emoji: '🏆',
       label: 'Golden Week',
-      description: '10 € ou plus gagnés en une semaine',
-      unlocked: bestWeek >= 1000,
-      progress: { current: Math.min(Math.floor(bestWeek / 100), 10), target: 10, unit: '€' },
+      description: '150 points ou plus gagnés en une semaine',
+      unlocked: bestWeek >= 150,
+      progress: { current: Math.min(bestWeek, 150), target: 150, unit: 'pts' },
     },
     {
       id: 'perfectionist',
@@ -119,9 +125,9 @@ export function computeBadges({ childId, submissions, transactions, children, no
       id: 'teamplayer',
       emoji: '🤝',
       label: 'Teamplayer',
-      description: '25 € gagnés par toute la fratrie ce mois-ci',
-      unlocked: familyMonth >= 2500,
-      progress: { current: Math.min(Math.floor(familyMonth / 100), 25), target: 25, unit: '€' },
+      description: '400 points cumulés par toute la fratrie ce mois-ci',
+      unlocked: familyMonth >= 400,
+      progress: { current: Math.min(familyMonth, 400), target: 400, unit: 'pts' },
     },
     {
       id: 'month-mvp',
@@ -134,9 +140,9 @@ export function computeBadges({ childId, submissions, transactions, children, no
       id: 'millionaire',
       emoji: '💰',
       label: 'Centenaire',
-      description: '100 € gagnés en tout',
-      unlocked: earned >= 10000,
-      progress: { current: Math.min(Math.floor(earned / 100), 100), target: 100, unit: '€' },
+      description: '1000 points gagnés en tout',
+      unlocked: earned >= 1000,
+      progress: { current: Math.min(earned, 1000), target: 1000, unit: 'pts' },
     },
   ]
 
