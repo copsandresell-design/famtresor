@@ -1,4 +1,6 @@
+import { ChevronRight, Medal, Sparkles, Trophy } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ConfirmModal } from '../../components/ui/ConfirmModal'
@@ -8,6 +10,12 @@ import { Switch } from '../../components/ui/Switch'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { FeatureFlags, Theme } from '../../types'
+
+const GAMIFICATION_LINKS = [
+  { to: '/parent/reglages/badges', icon: Medal, label: 'Badges', description: 'Catalogue, seuils et points de chaque badge.' },
+  { to: '/parent/reglages/series', icon: Sparkles, label: 'Séries', description: 'Séries globale, sans pénalité, ou liées à une tâche.' },
+  { to: '/parent/reglages/rangs', icon: Trophy, label: 'Rangs', description: 'Échelle de progression à vie et ses seuils.' },
+]
 
 const FEATURE_LABELS: { key: keyof FeatureFlags; emoji: string; label: string; description: string }[] = [
   {
@@ -333,6 +341,33 @@ export function SettingsPage() {
             </div>
           </div>
         )}
+      </Card>
+
+      <Card className="space-y-2 p-5">
+        <div>
+          <h2 className="font-bold">Gamification</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Catalogue de badges, séries et rangs — tout est modifiable ici, sans redéploiement.
+          </p>
+        </div>
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          {GAMIFICATION_LINKS.map(({ to, icon: Icon, label, description }) => (
+            <Link
+              key={to}
+              to={to}
+              className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:opacity-80"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400">
+                <Icon size={18} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">{label}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
+              </div>
+              <ChevronRight size={16} className="shrink-0 text-slate-400" />
+            </Link>
+          ))}
+        </div>
       </Card>
 
       <PushNotificationsCard userId={user.id} />
