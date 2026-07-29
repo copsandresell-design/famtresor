@@ -182,7 +182,14 @@ interface Store {
   deletePenaltyRule: (ruleId: string, actorId: string) => void
 
   resetBalance: (childId: string, parentId: string) => void
-  resetAllBalances: (parentId: string) => void
+  /**
+   * Remise à zéro complète de la saison pour tous les enfants : soldes, points (dépensables et
+   * à vie, donc rang), badges/séries (via rewardClaims), historique (transactions, soumissions,
+   * pénalités appliquées), objectifs d'épargne, et stock boutique restauré à sa valeur initiale
+   * (déduite des échanges non annulés). Ne touche pas aux comptes, aux catalogues (tâches,
+   * badges/séries/rangs, boutique) ni aux réglages.
+   */
+  resetSeason: (actorId: string) => void
 
   updateChild: (
     childId: string,
@@ -1267,10 +1274,50 @@ export const useStore = create<Store>((set, get) => {
       persist('transactions')
     },
 
-    resetAllBalances: (parentId) => {
-      for (const child of get().users.filter((u) => u.role === 'child')) {
-        get().resetBalance(child.id, parentId)
-      }
+    resetSeason: (actorId) => {
+      const { transactions, submissions, pointsTransactions, rewardClaims, redemptions, shopItems, savingsGoals } =
+        get()
+
+      // Stock initial déduit du stock courant + tous les échanges non annulés (chaque échange
+      // décrémente le stock de 1, chaque annulation le restaure — voir redeemShopItem/cancelRedemption).
+      const restoredShopItems = shopItems.map((item) => {
+        if (item.stock === undefined) return item
+        const consumed = redemptions.filter((r) => r.itemId === item.id && r.status !== 'cancelled').length
+        return { ...item, stock: item.stock + consumed }
+      })
+
+      set({
+        transactions: [],
+        submissions: [],
+        pointsTransactions: [],
+        rewardClaims: [],
+        redemptions: [],
+        savingsGoals: [],
+        shopItems: restoredShopItems,
+      })
+      save('transactions', [])
+      save('submissions', [])
+      save('pointsTransactions', [])
+      save('rewardClaims', [])
+      save('redemptions', [])
+      save('savingsGoals', [])
+      save('shopItems', restoredShopItems)
+
+      // persist() republie ce qui reste mais ne supprime jamais côté Supabase : ces tableaux
+      // étant désormais vides, il faut explicitement effacer chaque ancien enregistrement.
+      for (const t of transactions) deleteRecord('sync_transactions', t.id)
+      for (const s of submissions) deleteRecord('sync_submissions', s.id)
+      for (const p of pointsTransactions) deleteRecord('sync_points_transactions', p.id)
+      for (const r of rewardClaims) deleteRecord('sync_reward_claims', r.id)
+      for (const r of redemptions) deleteRecord('sync_redemptions', r.id)
+      for (const g of savingsGoals) deleteRecord('sync_savings_goals', g.id)
+      for (const item of restoredShopItems) pushRecord('sync_shop_items', item.id, item)
+
+      pushLog(
+        'season_reset',
+        actorId,
+        'Saison réinitialisée : soldes, points, rangs, badges, séries, historique et stock boutique remis à zéro pour tous les enfants.',
+      )
     },
 
     updateChild: (childId, patch, actorId) => {

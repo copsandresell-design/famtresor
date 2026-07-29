@@ -50,6 +50,7 @@ export const ACTION_LABELS: Record<string, string> = {
   submission_deleted: 'Validation supprimée définitivement',
   custom_notification_sent: 'Notification envoyée',
   daily_reminder_sent: 'Rappel quotidien envoyé',
+  season_reset: 'Saison réinitialisée',
 }
 
 export function actionLabel(action: string): string {
