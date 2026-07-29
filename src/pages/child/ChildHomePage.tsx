@@ -15,17 +15,18 @@ import { Modal } from '../../components/ui/Modal'
 import { db } from '../../db/storage'
 import { computeBadges, type BadgeState } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
-import { computePoints } from '../../lib/points'
+import { computeLifetimePoints, computePoints } from '../../lib/points'
 import { computeLevel } from '../../lib/levels'
+import { computeRank } from '../../lib/ranks'
 import { DIFFICULTIES } from '../../lib/categories'
 import { celebrateFireworks } from '../../lib/confetti'
 import { playCelebrationSound } from '../../lib/sound'
 import { childGradient, gradientEnd } from '../../lib/colors'
 import { formatEuro, formatRelative } from '../../lib/format'
 import { isTaskAvailable, timesSubmittedToday } from '../../lib/recurrence'
-import { computeStreak } from '../../lib/streak'
+import { computeStreak, computeStreakDefCount } from '../../lib/streak'
 import { useCurrentUser, useStore } from '../../store/useStore'
-import type { Task } from '../../types'
+import type { RankDef, Task } from '../../types'
 
 function DifficultyDots({ level }: { level: keyof typeof DIFFICULTIES }) {
   const { label, dots } = DIFFICULTIES[level]
@@ -64,6 +65,31 @@ function BadgeUnlockModal({ badge, onClose }: { badge: BadgeState; onClose: () =
   )
 }
 
+function RankUpModal({ rank, onClose }: { rank: RankDef; onClose: () => void }) {
+  return (
+    <Modal open onClose={onClose} title="Nouveau rang !">
+      <div className="flex flex-col items-center gap-3 pb-2 text-center">
+        <motion.span
+          className="text-7xl"
+          aria-hidden
+          initial={{ scale: 0, rotate: -20 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', damping: 10, stiffness: 200 }}
+        >
+          {rank.emoji}
+        </motion.span>
+        <p className="font-display text-xl font-bold" style={{ color: rank.color }}>
+          {rank.label}
+        </p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Tu as atteint un nouveau rang !</p>
+        <Button className="mt-2 w-full" onClick={onClose}>
+          Trop fort ! 🎉
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 export function ChildHomePage() {
   const user = useCurrentUser()
   const users = useStore((s) => s.users)
@@ -71,7 +97,12 @@ export function ChildHomePage() {
   const submissions = useStore((s) => s.submissions)
   const transactions = useStore((s) => s.transactions)
   const savingsGoals = useStore((s) => s.savingsGoals)
+  const redemptions = useStore((s) => s.redemptions)
   const pointsTransactions = useStore((s) => s.pointsTransactions)
+  const rewardClaims = useStore((s) => s.rewardClaims)
+  const streakDefs = useStore((s) => s.streakDefs)
+  const badgeDefs = useStore((s) => s.badgeDefs)
+  const rankDefs = useStore((s) => s.rankDefs)
   const messages = useStore((s) => s.messages)
   const settings = useStore((s) => s.settings)
   const submitTask = useStore((s) => s.submitTask)
@@ -82,6 +113,7 @@ export function ChildHomePage() {
   const [photos, setPhotos] = useState<PickedPhoto[]>([])
   const [comment, setComment] = useState('')
   const [unlockedBadge, setUnlockedBadge] = useState<BadgeState | null>(null)
+  const [rankedUpTo, setRankedUpTo] = useState<RankDef | null>(null)
   const [editingAvatar, setEditingAvatar] = useState(false)
 
   const childId = user?.id
@@ -124,8 +156,19 @@ export function ChildHomePage() {
     if (!childId) return
     const key = `seenBadges:${childId}`
     const children = users.filter((u) => u.role === 'child' && u.isActive)
-    const unlocked = computeBadges({ childId, submissions, pointsTransactions, children })
-      .filter((b) => b.unlocked)
+    const unlocked = computeBadges({
+      childId,
+      submissions,
+      pointsTransactions,
+      transactions,
+      tasks,
+      savingsGoals,
+      redemptions,
+      rewardClaims,
+      streakDefs,
+      badgeDefs,
+      children,
+    }).filter((b) => b.unlocked)
     void (async () => {
       const seen = await db.getItem<string[]>(key)
       if (seen !== null) {
@@ -138,7 +181,24 @@ export function ChildHomePage() {
       }
       await db.setItem(key, unlocked.map((b) => b.id))
     })()
-  }, [childId, submissions, pointsTransactions, users])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [childId, submissions, pointsTransactions, transactions, tasks, savingsGoals, redemptions, rewardClaims, streakDefs, badgeDefs, users])
+
+  // Détection d'un nouveau rang (progression à vie, ne redescend jamais).
+  useEffect(() => {
+    if (!childId || rankDefs.length === 0) return
+    const key = `seenRank:${childId}`
+    const rank = computeRank(computeLifetimePoints(pointsTransactions, childId), rankDefs)
+    void (async () => {
+      const seen = await db.getItem<string>(key)
+      if (seen !== null && seen !== rank.rank.id) {
+        celebrateFireworks([user!.color, gradientEnd(user!.color)])
+        playCelebrationSound()
+        setRankedUpTo(rank.rank)
+      }
+      await db.setItem(key, rank.rank.id)
+    })()
+  }, [childId, pointsTransactions, rankDefs, user])
 
   const available = useMemo(
     () => (childId ? tasks.filter((t) => isTaskAvailable(t, childId, submissions)) : []),
@@ -158,8 +218,38 @@ export function ChildHomePage() {
   const badges = useMemo(() => {
     if (!childId) return []
     const children = users.filter((u) => u.role === 'child' && u.isActive)
-    return computeBadges({ childId, submissions, pointsTransactions, children })
-  }, [childId, submissions, pointsTransactions, users])
+    return computeBadges({
+      childId,
+      submissions,
+      pointsTransactions,
+      transactions,
+      tasks,
+      savingsGoals,
+      redemptions,
+      rewardClaims,
+      streakDefs,
+      badgeDefs,
+      children,
+    })
+  }, [childId, submissions, pointsTransactions, transactions, tasks, savingsGoals, redemptions, rewardClaims, streakDefs, badgeDefs, users])
+
+  const rank = useMemo(() => {
+    if (!childId || rankDefs.length === 0) return null
+    return computeRank(computeLifetimePoints(pointsTransactions, childId), rankDefs)
+  }, [childId, pointsTransactions, rankDefs])
+
+  const activeStreaks = useMemo(() => {
+    if (!childId) return []
+    const now = new Date()
+    return streakDefs
+      .filter((d) => d.isActive)
+      .map((def) => {
+        const count = computeStreakDefCount(def, childId, { submissions, transactions, now })
+        const nextTier = def.tiers.find((t) => t.days > count)
+        return { def, count, nextTier }
+      })
+      .filter((s) => s.count > 0)
+  }, [childId, streakDefs, submissions, transactions])
 
   if (!user || !childId || !streak || !level) return null
 
@@ -207,6 +297,12 @@ export function ChildHomePage() {
         />
 
         <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+          {rank && (
+            <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
+              <span aria-hidden>{rank.rank.emoji}</span>
+              {rank.rank.label}
+            </p>
+          )}
           <p className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold">
             <Sparkles size={15} aria-hidden />
             Niveau {level.level} · {level.title}
@@ -312,6 +408,30 @@ export function ChildHomePage() {
             tâche pour la garder ! 🔥
           </p>
         </Card>
+      )}
+
+      {settings.features.streaks && activeStreaks.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-lg font-bold">Mes séries en cours</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {activeStreaks.map(({ def, count, nextTier }) => (
+              <Card key={def.id} className="flex flex-col items-center gap-1 p-4 text-center">
+                <span className="text-2xl" aria-hidden>
+                  {def.emoji}
+                </span>
+                <p className="text-xs font-bold leading-tight">{def.label}</p>
+                <p className="font-display text-xl font-bold text-amber-600 dark:text-amber-400">
+                  {count} j
+                </p>
+                {nextTier && (
+                  <p className="text-[10px] text-slate-400">
+                    {nextTier.days - count} j avant +{nextTier.points} pts
+                  </p>
+                )}
+              </Card>
+            ))}
+          </div>
+        </section>
       )}
 
       <section>
@@ -440,6 +560,12 @@ export function ChildHomePage() {
       <AnimatePresence>
         {unlockedBadge && (
           <BadgeUnlockModal badge={unlockedBadge} onClose={() => setUnlockedBadge(null)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {!unlockedBadge && rankedUpTo && (
+          <RankUpModal rank={rankedUpTo} onClose={() => setRankedUpTo(null)} />
         )}
       </AnimatePresence>
 

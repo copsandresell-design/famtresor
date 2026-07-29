@@ -15,7 +15,8 @@ import { cn } from '../../lib/cn'
 import { computeBadges } from '../../lib/badges'
 import { computeBalance } from '../../lib/balance'
 import { formatEuro, formatRelative } from '../../lib/format'
-import { computePoints } from '../../lib/points'
+import { computeLifetimePoints, computePoints } from '../../lib/points'
+import { computeRank } from '../../lib/ranks'
 import { useCurrentUser, useStore } from '../../store/useStore'
 
 const WEEK = { weekStartsOn: 1 as const }
@@ -26,7 +27,14 @@ export function ChildProfilePage() {
   const settings = useStore((s) => s.settings)
   const transactions = useStore((s) => s.transactions)
   const submissions = useStore((s) => s.submissions)
+  const savingsGoals = useStore((s) => s.savingsGoals)
+  const redemptions = useStore((s) => s.redemptions)
   const pointsTransactions = useStore((s) => s.pointsTransactions)
+  const rewardClaims = useStore((s) => s.rewardClaims)
+  const streakDefs = useStore((s) => s.streakDefs)
+  const badgeDefs = useStore((s) => s.badgeDefs)
+  const rankDefs = useStore((s) => s.rankDefs)
+  const tasks = useStore((s) => s.tasks)
   const messages = useStore((s) => s.messages)
   const logout = useStore((s) => s.logout)
   const [editingAvatar, setEditingAvatar] = useState(false)
@@ -59,13 +67,30 @@ export function ChildProfilePage() {
   const badges = useMemo(
     () =>
       user
-        ? computeBadges({ childId: user.id, submissions, pointsTransactions, children })
+        ? computeBadges({
+            childId: user.id,
+            submissions,
+            pointsTransactions,
+            transactions,
+            tasks,
+            savingsGoals,
+            redemptions,
+            rewardClaims,
+            streakDefs,
+            badgeDefs,
+            children,
+          })
         : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, submissions, pointsTransactions, users],
+    [user, submissions, pointsTransactions, transactions, tasks, savingsGoals, redemptions, rewardClaims, streakDefs, badgeDefs, users],
   )
 
-  const rank = useMemo(() => {
+  const lifetimeRank = useMemo(() => {
+    if (!user || rankDefs.length === 0) return null
+    return computeRank(computeLifetimePoints(pointsTransactions, user.id), rankDefs)
+  }, [user, pointsTransactions, rankDefs])
+
+  const monthlyPosition = useMemo(() => {
     if (!user) return null
     const monthGains = (id: string) =>
       pointsTransactions
@@ -110,12 +135,44 @@ export function ChildProfilePage() {
             {formatEuro(computeBalance(transactions, user.id))}
           </p>
         )}
-        {settings.features.leaderboard && rank !== null && (
+        {settings.features.leaderboard && monthlyPosition !== null && (
           <p className="rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
-            {medals[rank - 1] ?? '🏅'} {rank === 1 ? 'MVP du mois !' : `${rank}ᵉ ce mois-ci`}
+            {medals[monthlyPosition - 1] ?? '🏅'}{' '}
+            {monthlyPosition === 1 ? 'MVP du mois !' : `${monthlyPosition}ᵉ ce mois-ci`}
           </p>
         )}
       </Card>
+
+      {lifetimeRank && (
+        <Card className="space-y-2 p-5">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl" aria-hidden>
+              {lifetimeRank.rank.emoji}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-display font-bold" style={{ color: lifetimeRank.rank.color }}>
+                {lifetimeRank.rank.label}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {lifetimeRank.next
+                  ? `${lifetimeRank.target - lifetimeRank.progress} pts avant ${lifetimeRank.next.emoji} ${lifetimeRank.next.label}`
+                  : 'Rang maximum atteint !'}
+              </p>
+            </div>
+          </div>
+          {lifetimeRank.next && (
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.min(100, (lifetimeRank.progress / lifetimeRank.target) * 100)}%`,
+                  backgroundColor: lifetimeRank.rank.color,
+                }}
+              />
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card className="p-4 text-center">
@@ -141,8 +198,8 @@ export function ChildProfilePage() {
       </div>
 
       <section>
-        <h2 className="mb-3 text-lg font-bold">Mes badges</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <h2 className="mb-3 text-lg font-bold">Mes badges ({badges.filter((b) => b.unlocked).length}/{badges.length})</h2>
+        <div className="grid max-h-[28rem] grid-cols-3 gap-3 overflow-y-auto pr-1">
           {badges.map((badge) => (
             <Card
               key={badge.id}
