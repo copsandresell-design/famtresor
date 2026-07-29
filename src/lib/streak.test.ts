@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { computeStreak, streakMilestonesReached } from './streak'
-import type { TaskSubmission } from '../types'
+import {
+  computeNoPenaltyStreak,
+  computeStreak,
+  computeStreakDefCount,
+  computeTaskStreak,
+  streakDefMilestonesReached,
+  streakMilestonesReached,
+} from './streak'
+import type { StreakDef, TaskSubmission, Transaction } from '../types'
 
 const CHILD = 'child-1'
 
@@ -54,5 +61,84 @@ describe('streakMilestonesReached', () => {
   it('renvoie tous les paliers atteints, triés croissant', () => {
     expect(streakMilestonesReached(10)).toEqual([3, 7])
     expect(streakMilestonesReached(30)).toEqual([3, 7, 14, 30])
+  })
+})
+
+function tx(dateIso: string, opts?: Partial<Transaction>): Transaction {
+  return {
+    id: dateIso + Math.random(),
+    type: 'penalty',
+    childId: CHILD,
+    amount: -100,
+    description: 'test',
+    createdBy: 'parent-1',
+    createdAt: new Date(dateIso).getTime(),
+    ...opts,
+  }
+}
+
+describe('computeTaskStreak', () => {
+  it('ne compte que les validations approuvées de la tâche donnée', () => {
+    const subs = [
+      sub('2026-07-22T10:00:00'),
+      sub('2026-07-21T10:00:00'),
+      sub('2026-07-20T10:00:00', 'pending'),
+    ]
+    expect(computeTaskStreak(CHILD, 'task-1', subs, NOW)).toBe(2)
+  })
+
+  it('ignore les validations d’une autre tâche', () => {
+    const other: TaskSubmission = { ...sub('2026-07-22T10:00:00'), taskId: 'task-2' }
+    expect(computeTaskStreak(CHILD, 'task-1', [other], NOW)).toBe(0)
+  })
+})
+
+describe('computeNoPenaltyStreak', () => {
+  it('compte les jours consécutifs sans pénalité', () => {
+    expect(computeNoPenaltyStreak(CHILD, [], NOW)).toBeGreaterThan(300)
+  })
+
+  it('s’arrête à la pénalité la plus récente', () => {
+    const transactions = [tx('2026-07-20T10:00:00')]
+    // 2026-07-22 - 2026-07-21 = 2 jours sans pénalité (20 est la coupure)
+    expect(computeNoPenaltyStreak(CHILD, transactions, NOW)).toBe(2)
+  })
+
+  it('une pénalité annulée ne compte pas', () => {
+    const transactions = [tx('2026-07-20T10:00:00', { cancelled: true })]
+    expect(computeNoPenaltyStreak(CHILD, transactions, NOW)).toBeGreaterThan(300)
+  })
+})
+
+describe('computeStreakDefCount / streakDefMilestonesReached', () => {
+  it('délègue au bon calcul selon le genre de la définition', () => {
+    const globalDef: StreakDef = {
+      id: 'global',
+      kind: 'global',
+      label: 'Série',
+      emoji: '🔥',
+      tiers: [{ days: 3, points: 15 }],
+      isActive: true,
+      createdBy: 'system',
+      createdAt: 0,
+    }
+    const subs = [sub('2026-07-22T10:00:00'), sub('2026-07-21T10:00:00'), sub('2026-07-20T10:00:00')]
+    expect(computeStreakDefCount(globalDef, CHILD, { submissions: subs, transactions: [], now: NOW })).toBe(3)
+    expect(streakDefMilestonesReached(globalDef, 3)).toEqual([{ days: 3, points: 15 }])
+    expect(streakDefMilestonesReached(globalDef, 2)).toEqual([])
+  })
+
+  it('genre "task" nécessite un taskId, sinon 0', () => {
+    const def: StreakDef = {
+      id: 'x',
+      kind: 'task',
+      label: 'X',
+      emoji: '🦷',
+      tiers: [],
+      isActive: true,
+      createdBy: 'system',
+      createdAt: 0,
+    }
+    expect(computeStreakDefCount(def, CHILD, { submissions: [], transactions: [], now: NOW })).toBe(0)
   })
 })

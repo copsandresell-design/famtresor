@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computePoints } from './points'
+import { computeLifetimePoints, computePoints } from './points'
 import type { PointsTransaction } from '../types'
 
 const CHILD = 'child-1'
@@ -29,5 +29,18 @@ describe('computePoints', () => {
 
   it('vaut 0 sans transaction', () => {
     expect(computePoints([], CHILD)).toBe(0)
+  })
+})
+
+describe('computeLifetimePoints', () => {
+  it('ne compte que les gains, jamais les dépenses', () => {
+    const points = [ptx(20), ptx(-15), ptx(50)]
+    expect(computeLifetimePoints(points, CHILD)).toBe(70)
+  })
+
+  it('ne redescend jamais même après une grosse dépense', () => {
+    const points = [ptx(100), ptx(-90)]
+    expect(computeLifetimePoints(points, CHILD)).toBe(100)
+    expect(computePoints(points, CHILD)).toBe(10)
   })
 })
