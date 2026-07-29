@@ -1,6 +1,7 @@
 import { hashSecret, makeSalt } from '../lib/crypto'
 import { uid } from '../lib/id'
-import type { Settings, Task, User } from '../types'
+import { DEFAULT_STREAK_DEFS } from '../lib/streak'
+import type { Settings, StreakDef, Task, User } from '../types'
 
 export const DEFAULT_SECRETS: Record<string, string> = {
   Marion: 'parent',
@@ -66,6 +67,8 @@ export function seedTasks(users: User[]): Task[] {
     { ...base, id: uid(), title: 'Débarrasser et essuyer la table', points: 10, category: 'cuisine', icon: '🧽', difficulty: 'easy', recurrence: { frequency: 'daily' } },
     { ...base, id: uid(), title: 'Ranger le canapé', points: 8, category: 'rangement', icon: '🛋️', difficulty: 'easy', recurrence: { frequency: 'daily' } },
     { ...base, id: uid(), title: 'Ranger chaussures et sac à l’entrée', points: 8, category: 'rangement', icon: '👟', difficulty: 'easy', recurrence: { frequency: 'daily' } },
+    // Quotidienne, faible en points : le vrai gain vient du bonus de série (5j/20j — voir seedStreakDefs).
+    { ...base, id: uid(), title: 'Se brosser les dents', points: 5, category: 'autre', icon: '🦷', difficulty: 'easy', recurrence: { frequency: 'daily' }, dailyLimit: 2 },
     // 2× par semaine
     { ...base, id: uid(), title: 'Vider les poubelles', points: 20, category: 'menage', icon: '🗑️', difficulty: 'easy', recurrence: { frequency: 'twice-weekly' } },
     { ...base, id: uid(), title: 'Ramasser le linge', points: 25, category: 'linge', icon: '👕', difficulty: 'easy', recurrence: { frequency: 'twice-weekly' } },
@@ -76,9 +79,56 @@ export function seedTasks(users: User[]): Task[] {
     { ...base, id: uid(), title: 'Arroser les plantes', points: 25, category: 'autre', icon: '🌱', difficulty: 'easy', recurrence: { frequency: 'weekly', dayOfWeek: 0 } },
     { ...base, id: uid(), title: 'Passer la pièce', points: 45, category: 'menage', icon: '🪣', difficulty: 'medium', recurrence: { frequency: 'weekly', dayOfWeek: 2 } },
     { ...base, id: uid(), title: "Passer l'aspirateur", points: 55, category: 'menage', icon: '🧹', difficulty: 'medium', recurrence: { frequency: 'weekly', dayOfWeek: 5 } },
-    { ...base, id: uid(), title: 'Ranger sa chambre', points: 60, category: 'rangement', icon: '🛏️', difficulty: 'hard', recurrence: { frequency: 'weekly', dayOfWeek: 6 } },
     { ...base, id: uid(), title: 'Aider à préparer le repas', points: 75, category: 'cuisine', icon: '🍳', difficulty: 'hard', recurrence: { frequency: 'weekly', dayOfWeek: 4 } },
+    // Passée en quotidienne (était hebdomadaire) pour porter le streak "chambre nickel" —
+    // points individuels baissés en conséquence, le vrai gain vient désormais du bonus de série.
+    { ...base, id: uid(), title: 'Ranger sa chambre', points: 10, category: 'rangement', icon: '🛏️', difficulty: 'medium', recurrence: { frequency: 'daily' } },
   ]
+}
+
+/**
+ * Catalogue de séries pour une nouvelle famille locale : le socle agnostique
+ * (DEFAULT_STREAK_DEFS) complété par les deux séries liées à une tâche précise
+ * (brossage de dents, rangement de chambre), qui ont besoin des id réels des tâches
+ * fraîchement créées par seedTasks().
+ */
+export function seedStreakDefs(tasks: Task[]): StreakDef[] {
+  const teeth = tasks.find((t) => t.title === 'Se brosser les dents')
+  const room = tasks.find((t) => t.title === 'Ranger sa chambre')
+  const taskStreaks: StreakDef[] = []
+  if (teeth) {
+    taskStreaks.push({
+      id: 'brossage-dents',
+      kind: 'task',
+      label: 'Brossage de dents',
+      emoji: '🦷',
+      taskId: teeth.id,
+      tiers: [
+        { days: 5, points: 25 },
+        { days: 20, points: 100 },
+      ],
+      isActive: true,
+      createdBy: 'system',
+      createdAt: Date.now(),
+    })
+  }
+  if (room) {
+    taskStreaks.push({
+      id: 'rangement-chambre',
+      kind: 'task',
+      label: 'Chambre rangée',
+      emoji: '🧹',
+      taskId: room.id,
+      tiers: [
+        { days: 5, points: 30 },
+        { days: 20, points: 120 },
+      ],
+      isActive: true,
+      createdBy: 'system',
+      createdAt: Date.now(),
+    })
+  }
+  return [...DEFAULT_STREAK_DEFS, ...taskStreaks]
 }
 
 export const defaultSettings: Settings = {

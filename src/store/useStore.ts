@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { db, load, save } from '../db/storage'
-import { defaultSettings, seedTasks, seedUsers } from '../db/seed'
+import { defaultSettings, seedStreakDefs, seedTasks, seedUsers } from '../db/seed'
 import { computeBadges, DEFAULT_BADGE_DEFS } from '../lib/badges'
 import { computeBalance } from '../lib/balance'
 import { hashSecret, makeSalt, verifySecret } from '../lib/crypto'
@@ -627,7 +627,7 @@ export const useStore = create<Store>((set, get) => {
         } else if (users.length === 0) {
           users = await seedUsers()
           tasks = seedTasks(users)
-          streakDefs = DEFAULT_STREAK_DEFS
+          streakDefs = seedStreakDefs(tasks)
           badgeDefs = DEFAULT_BADGE_DEFS
           rankDefs = DEFAULT_RANK_DEFS
           logs = [
@@ -682,7 +682,7 @@ export const useStore = create<Store>((set, get) => {
         if (users.length === 0) {
           users = await seedUsers()
           tasks = seedTasks(users)
-          streakDefs = DEFAULT_STREAK_DEFS
+          streakDefs = seedStreakDefs(tasks)
           badgeDefs = DEFAULT_BADGE_DEFS
           rankDefs = DEFAULT_RANK_DEFS
           logs = [
