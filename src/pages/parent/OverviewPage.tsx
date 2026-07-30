@@ -315,7 +315,7 @@ export function OverviewPage() {
       )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Card className="border-0 bg-gradient-to-br from-violet-500 to-blue-500 p-4 text-white shadow-md shadow-violet-500/25">
+        <Card className="glow-brand border-0 bg-gradient-to-br from-brand-from to-brand-to p-4 text-white">
           <p className="flex items-center gap-1.5 text-xs font-semibold text-white/85">
             <Sparkles size={14} aria-hidden />
             Points cette semaine
