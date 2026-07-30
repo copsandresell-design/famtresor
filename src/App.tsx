@@ -9,6 +9,7 @@ import { UpdateBanner } from './components/UpdateBanner'
 import { useDataRealtime } from './hooks/useDataSync'
 import { useNotificationRealtime } from './hooks/useNotifications'
 import { DemoLandingPage } from './pages/DemoLandingPage'
+import { FamilyAuthScreen } from './pages/FamilyAuthScreen'
 import { LoginPage } from './pages/LoginPage'
 import { ChildHistoryPage } from './pages/child/ChildHistoryPage'
 import { ChildHomePage } from './pages/child/ChildHomePage'
@@ -26,6 +27,8 @@ import { ChildShopPage } from './pages/child/ChildShopPage'
 import { SettingsPage } from './pages/parent/SettingsPage'
 import { StreakDefsPage } from './pages/parent/StreakDefsPage'
 import { TasksPage } from './pages/parent/TasksPage'
+import { useDemoMode } from './store/demoStore'
+import { useFamilyAuthStore } from './store/familyAuthStore'
 import { useStore } from './store/useStore'
 
 // Recharts ne sert qu'ici : chargÃ© Ã  la demande pour allÃ©ger le bundle initial.
@@ -64,16 +67,38 @@ export default function App() {
   const session = useStore((s) => s.session)
   const init = useStore((s) => s.init)
   const shopEnabled = useStore((s) => s.settings.features.shop)
+  const demoActive = useDemoMode((s) => s.active)
+  const familyAuthStatus = useFamilyAuthStore((s) => s.status)
   useTheme()
   useSessionExpiry()
   useNotificationRealtime()
   useDataRealtime()
 
-  useEffect(() => {
-    void init()
-  }, [init])
+  // En mode démo, aucune donnée réelle ne doit transiter par Supabase (voir store/demoStore.ts) :
+  // on initialise dans ce cas sans attendre l'auth Supabase (le store de démo n'y touche jamais).
+  // Sinon, on n'appelle l'init réelle (fetch Supabase, family_id implicite via la session/RLS —
+  // voir supabase/migrations/20260730010000_multi_family_phase1.sql) qu'une fois un parent
+  // authentifié ET rattaché à une famille, pour ne jamais lancer un fetch voué à revenir vide.
+  const shouldInitRealStore = demoActive || familyAuthStatus === 'ready'
 
-  if (!ready) {
+  useEffect(() => {
+    if (shouldInitRealStore) void init()
+  }, [init, shouldInitRealStore])
+
+  // Statut Supabase Auth encore inconnu (restauration de session en cours) : on attend avant de
+  // décider quoi afficher, sauf en mode démo qui ne dépend jamais de Supabase.
+  if (!demoActive && familyAuthStatus === 'loading') {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <UpdateBanner />
+        <p className="animate-pulse text-4xl" aria-label="Chargement">
+          🚀
+        </p>
+      </div>
+    )
+  }
+
+  if (shouldInitRealStore && !ready) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
         <UpdateBanner />
@@ -92,7 +117,12 @@ export default function App() {
         <Routes>
           {/* Toujours accessible, session ou non : point d'entrée de la démo (voir store/demoStore.ts). */}
           <Route path="/demo" element={<DemoLandingPage />} />
-          {!session && <Route path="*" element={<LoginPage />} />}
+          {/* Pas encore de session Supabase Auth (parent) : écran de connexion/inscription famille,
+              avant même le picker PIN existant (voir pages/FamilyAuthScreen.tsx). */}
+          {!demoActive && (familyAuthStatus === 'signed-out' || familyAuthStatus === 'needs-family') && (
+            <Route path="*" element={<FamilyAuthScreen />} />
+          )}
+          {shouldInitRealStore && !session && <Route path="*" element={<LoginPage />} />}
           {session?.role === 'parent' && (
             <>
               <Route path="/parent" element={<ParentLayout />}>

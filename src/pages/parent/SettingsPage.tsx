@@ -10,6 +10,7 @@ import { PushNotificationsCard } from '../../components/ui/PushNotificationsCard
 import { Switch } from '../../components/ui/Switch'
 import { cn } from '../../lib/cn'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
+import { signOutFamily } from '../../lib/familyAuth'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { FeatureFlags, Theme } from '../../types'
 
@@ -670,6 +671,20 @@ export function SettingsPage() {
         <p className="text-xs text-slate-400">
           Les PIN des enfants se changent depuis la page Enfants.
         </p>
+      </Card>
+
+      <Card className="space-y-3 p-5">
+        <h2 className="font-bold">Compte</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Déconnecte complètement cet appareil (tous les profils, y compris les enfants) —
+          différent du bouton « Déconnexion » du menu, qui ne fait que revenir au choix de profil
+          sans quitter la famille sur cet appareil.
+        </p>
+        <div className="flex justify-end">
+          <Button variant="soft" onClick={() => void signOutFamily()}>
+            Se déconnecter de cet appareil
+          </Button>
+        </div>
       </Card>
 
       <Card className="space-y-3 border-rose-200 p-5 dark:border-rose-900">

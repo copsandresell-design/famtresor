@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { useDemoMode, useDemoStore } from './demoStore'
 import { db, load, save } from '../db/storage'
-import { defaultSettings, seedStreakDefs, seedTasks, seedUsers } from '../db/seed'
+import { defaultSettings, seedStreakDefs } from '../db/seed'
 import { computeBadges, DEFAULT_BADGE_DEFS } from '../lib/badges'
 import { computeBalance } from '../lib/balance'
 import { hashSecret, makeSalt, verifySecret } from '../lib/crypto'
@@ -679,23 +679,17 @@ const useRealStore = create<Store>((set, get) => {
             save('session', session)
           }
         } else if (users.length === 0) {
-          users = await seedUsers()
-          tasks = seedTasks(users)
+          // Multi-familles (GODCLAUDE phase 1) : sync_users vide pour CETTE famille (authentifiée
+          // via Supabase Auth, family_id implicite par RLS) ne veut plus dire "tout premier
+          // lancement de l'app, jamais connectée à Supabase" (c'était le seul cas avant l'auth
+          // multi-familles) — ça peut aussi vouloir dire "famille toute neuve". Le flux d'inscription
+          // (src/pages/FamilyAuthScreen.tsx) crée déjà le premier profil parent AVANT que ce code ne
+          // s'exécute ; on ne clone donc plus ici la famille de Julien (seedUsers/seedTasks) par
+          // défaut pour une famille qui n'en a pas encore — juste les catalogues génériques
+          // (séries/badges/rangs), qui ne contiennent aucune donnée personnelle.
           streakDefs = seedStreakDefs(tasks)
           badgeDefs = DEFAULT_BADGE_DEFS
           rankDefs = DEFAULT_RANK_DEFS
-          logs = [
-            {
-              id: uid(),
-              action: 'seed',
-              actorId: users[0].id,
-              details: 'Création de la famille et des tâches de base',
-              timestamp: Date.now(),
-            },
-          ]
-          save('users', users)
-          save('tasks', tasks)
-          save('logs', logs)
           save('settings', settings)
           save('streakDefs', streakDefs)
           save('badgeDefs', badgeDefs)
@@ -734,33 +728,11 @@ const useRealStore = create<Store>((set, get) => {
         }
       } catch (e) {
         console.error('❌ Sync : initialisation distante échouée, poursuite en local', e)
-        if (users.length === 0) {
-          users = await seedUsers()
-          tasks = seedTasks(users)
-          streakDefs = seedStreakDefs(tasks)
-          badgeDefs = DEFAULT_BADGE_DEFS
-          rankDefs = DEFAULT_RANK_DEFS
-          logs = [
-            {
-              id: uid(),
-              action: 'seed',
-              actorId: users[0].id,
-              details: 'Création de la famille et des tâches de base',
-              timestamp: Date.now(),
-            },
-          ]
-          save('users', users)
-          save('tasks', tasks)
-          save('logs', logs)
-          save('settings', settings)
-          save('streakDefs', streakDefs)
-          save('badgeDefs', badgeDefs)
-          save('rankDefs', rankDefs)
-        } else {
-          if (streakDefs.length === 0) streakDefs = seedStreakDefs(tasks)
-          if (badgeDefs.length === 0) badgeDefs = DEFAULT_BADGE_DEFS
-          if (rankDefs.length === 0) rankDefs = DEFAULT_RANK_DEFS
-        }
+        // Multi-familles (GODCLAUDE phase 1) : même raisonnement que le cas "vide mais sans
+        // erreur" ci-dessus — plus de clonage de la famille de Julien par défaut ici non plus.
+        if (streakDefs.length === 0) streakDefs = seedStreakDefs(tasks)
+        if (badgeDefs.length === 0) badgeDefs = DEFAULT_BADGE_DEFS
+        if (rankDefs.length === 0) rankDefs = DEFAULT_RANK_DEFS
       }
 
       if (session && session.expiresAt < Date.now()) {

@@ -5,6 +5,13 @@
 // Idempotence : une pénalité automatique n'est appliquée qu'une fois par jour et par
 // enfant/règle, via la table sync_automation_log (clé unique 'inactivity:<childId>:<date>'
 // ou 'penaltyRule:<ruleId>:<date>').
+//
+// Multi-familles (GODCLAUDE phase 1) : ce script utilise la clé service_role, qui
+// contourne totalement la RLS scopée par famille (aucune session utilisateur, donc
+// auth.uid() = NULL côté Postgres). Il doit donc lui-même itérer famille par famille et
+// tamponner explicitement family_id sur chaque ligne insérée — sans ça, avec plusieurs
+// familles, les réglages/utilisateurs/règles de familles différentes se retrouveraient
+// mélangés dans une seule passe (mauvaise famille appliquée aux mauvais enfants).
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || ''
@@ -84,8 +91,8 @@ export default async function handler(req: any, res: any) {
   const now = new Date()
   const today = todayKey()
 
-  async function readTable<T>(table: string): Promise<T[]> {
-    const { data, error } = await supabase.from(table).select('id, data')
+  async function readTable<T>(table: string, familyId: string): Promise<T[]> {
+    const { data, error } = await supabase.from(table).select('id, data').eq('family_id', familyId)
     if (error) {
       console.error(`check-inactivity: lecture ${table} échouée`, error.message)
       return []
@@ -93,29 +100,39 @@ export default async function handler(req: any, res: any) {
     return (data ?? []).map((row: any) => row.data as T)
   }
 
-  async function alreadyRan(key: string): Promise<boolean> {
-    const { data } = await supabase.from('sync_automation_log').select('id').eq('data->>key', key).limit(1)
+  async function alreadyRan(familyId: string, key: string): Promise<boolean> {
+    const { data } = await supabase
+      .from('sync_automation_log')
+      .select('id')
+      .eq('family_id', familyId)
+      .eq('data->>key', key)
+      .limit(1)
     return !!data && data.length > 0
   }
 
-  async function markRan(key: string): Promise<void> {
+  async function markRan(familyId: string, key: string): Promise<void> {
     const id = uid()
-    await supabase.from('sync_automation_log').insert({ id, data: { id, key, createdAt: Date.now() } })
+    await supabase.from('sync_automation_log').insert({ id, family_id: familyId, data: { id, key, createdAt: Date.now() } })
   }
 
-  async function pushLog(entry: {
-    action: string
-    actorId: string
-    subjectId?: string
-    relatedId?: string
-    amount?: number
-    details: string
-  }) {
+  async function pushLog(
+    familyId: string,
+    entry: {
+      action: string
+      actorId: string
+      subjectId?: string
+      relatedId?: string
+      amount?: number
+      details: string
+    },
+  ) {
     const row = { id: uid(), ...entry, timestamp: Date.now() }
-    await supabase.from('sync_logs').upsert({ id: row.id, data: row, updated_at: new Date().toISOString() })
+    await supabase
+      .from('sync_logs')
+      .upsert({ id: row.id, family_id: familyId, data: row, updated_at: new Date().toISOString() })
   }
 
-  async function insertTransaction(childId: string, amount: number, description: string) {
+  async function insertTransaction(familyId: string, childId: string, amount: number, description: string) {
     const tx = {
       id: uid(),
       type: 'penalty',
@@ -125,11 +142,13 @@ export default async function handler(req: any, res: any) {
       createdBy: 'system',
       createdAt: Date.now(),
     }
-    await supabase.from('sync_transactions').upsert({ id: tx.id, data: tx, updated_at: new Date().toISOString() })
+    await supabase
+      .from('sync_transactions')
+      .upsert({ id: tx.id, family_id: familyId, data: tx, updated_at: new Date().toISOString() })
     return tx
   }
 
-  async function insertPointsTransaction(childId: string, amount: number, description: string) {
+  async function insertPointsTransaction(familyId: string, childId: string, amount: number, description: string) {
     const ptx = {
       id: uid(),
       childId,
@@ -141,7 +160,7 @@ export default async function handler(req: any, res: any) {
     }
     await supabase
       .from('sync_points_transactions')
-      .upsert({ id: ptx.id, data: ptx, updated_at: new Date().toISOString() })
+      .upsert({ id: ptx.id, family_id: familyId, data: ptx, updated_at: new Date().toISOString() })
   }
 
   async function sendPush(userId: string, title: string, body: string, icon: string, link: string) {
@@ -158,23 +177,30 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  const settingsRows = await readTable<Settings>('sync_settings')
-  const settings = settingsRows[0]
-  if (!settings) {
-    res.status(200).json({ skipped: true, reason: 'no-settings' })
+  const { data: families, error: familiesError } = await supabase.from('families').select('id')
+  if (familiesError) {
+    console.error('check-inactivity: lecture families échouée', familiesError.message)
+    res.status(500).json({ error: familiesError.message })
     return
   }
 
   const results = { inactivityApplied: 0, ruleApplied: 0 }
 
-  if (settings.features.inactivityPenalties || settings.features.recurringPenalties) {
-    const users = await readTable<User>('sync_users')
+  for (const family of families ?? []) {
+    const familyId = family.id as string
+    const settingsRows = await readTable<Settings>('sync_settings', familyId)
+    const settings = settingsRows[0]
+    if (!settings) continue
+
+    if (!settings.features.inactivityPenalties && !settings.features.recurringPenalties) continue
+
+    const users = await readTable<User>('sync_users', familyId)
     const parents = users.filter((u) => u.role === 'parent' && u.isActive)
     const children = users.filter((u) => u.role === 'child' && u.isActive)
 
     // --- Pénalités d'inactivité ---
     if (settings.features.inactivityPenalties) {
-      const submissions = await readTable<TaskSubmission>('sync_submissions')
+      const submissions = await readTable<TaskSubmission>('sync_submissions', familyId)
       const cfg = settings.inactivityPenalty
 
       for (const child of children) {
@@ -187,7 +213,7 @@ export default async function handler(req: any, res: any) {
         if (daysSince >= cfg.thresholdDays) {
           const extraDays = daysSince - cfg.thresholdDays + 1
           const key = `inactivity:${child.id}:${today}`
-          if (await alreadyRan(key)) continue
+          if (await alreadyRan(familyId, key)) continue
 
           const amountMoney = cfg.applyMoney ? Math.round(cfg.baseAmountCents * extraDays * cfg.severityMultiplier) : 0
           const amountPoints = cfg.applyPoints
@@ -197,10 +223,10 @@ export default async function handler(req: any, res: any) {
 
           const description = `⚠️ ${extraDays} jour${extraDays > 1 ? 's' : ''} d'inactivité — pénalité automatique`
           let tx: { id: string; amount: number } | null = null
-          if (amountMoney > 0) tx = await insertTransaction(child.id, amountMoney, description)
-          if (amountPoints > 0) await insertPointsTransaction(child.id, amountPoints, description)
+          if (amountMoney > 0) tx = await insertTransaction(familyId, child.id, amountMoney, description)
+          if (amountPoints > 0) await insertPointsTransaction(familyId, child.id, amountPoints, description)
 
-          await pushLog({
+          await pushLog(familyId, {
             action: 'inactivity_penalty_applied',
             actorId: 'system',
             subjectId: child.id,
@@ -208,7 +234,7 @@ export default async function handler(req: any, res: any) {
             amount: tx ? tx.amount : undefined,
             details: description,
           })
-          await markRan(key)
+          await markRan(familyId, key)
           results.inactivityApplied++
 
           const body = `${child.name} : ${description}${amountMoney > 0 ? ` (${(amountMoney / 100).toFixed(2)} €)` : ''}`
@@ -222,7 +248,7 @@ export default async function handler(req: any, res: any) {
 
     // --- Règles de pénalité récurrentes ---
     if (settings.features.recurringPenalties) {
-      const rules = (await readTable<PenaltyRule>('sync_penalty_rules')).filter((r) => r.active)
+      const rules = (await readTable<PenaltyRule>('sync_penalty_rules', familyId)).filter((r) => r.active)
 
       for (const rule of rules) {
         const due =
@@ -232,11 +258,11 @@ export default async function handler(req: any, res: any) {
         if (!due) continue
 
         const key = `penaltyRule:${rule.id}:${today}`
-        if (await alreadyRan(key)) continue
+        if (await alreadyRan(familyId, key)) continue
 
         const description = `⚠️ ${rule.title} (règle automatique)`
-        const tx = await insertTransaction(rule.childId, rule.amount, description)
-        await pushLog({
+        const tx = await insertTransaction(familyId, rule.childId, rule.amount, description)
+        await pushLog(familyId, {
           action: 'penalty_rule_auto_applied',
           actorId: 'system',
           subjectId: rule.childId,
@@ -244,7 +270,7 @@ export default async function handler(req: any, res: any) {
           amount: tx.amount,
           details: description,
         })
-        await markRan(key)
+        await markRan(familyId, key)
         results.ruleApplied++
 
         const child = children.find((c) => c.id === rule.childId)

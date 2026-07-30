@@ -10,6 +10,11 @@
 //
 // Idempotence : un rappel n'est envoyé qu'une fois par jour et par enfant, via la table
 // sync_automation_log (clé 'reminder:<childId>:<date>'), comme pour l'inactivité.
+//
+// Multi-familles (GODCLAUDE phase 1) : clé service_role → RLS scopée par famille
+// contournée (pas de session utilisateur). Ce script itère donc famille par famille et
+// tamponne explicitement family_id sur chaque ligne insérée (voir check-inactivity.ts,
+// même raisonnement).
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || ''
@@ -72,8 +77,8 @@ export default async function handler(req: any, res: any) {
   const now = new Date()
   const today = parisDateKey(now)
 
-  async function readTable<T>(table: string): Promise<T[]> {
-    const { data, error } = await supabase.from(table).select('id, data')
+  async function readTable<T>(table: string, familyId: string): Promise<T[]> {
+    const { data, error } = await supabase.from(table).select('id, data').eq('family_id', familyId)
     if (error) {
       console.error(`daily-reminder: lecture ${table} échouée`, error.message)
       return []
@@ -81,17 +86,22 @@ export default async function handler(req: any, res: any) {
     return (data ?? []).map((row: any) => row.data as T)
   }
 
-  async function alreadySent(key: string): Promise<boolean> {
-    const { data } = await supabase.from('sync_automation_log').select('id').eq('data->>key', key).limit(1)
+  async function alreadySent(familyId: string, key: string): Promise<boolean> {
+    const { data } = await supabase
+      .from('sync_automation_log')
+      .select('id')
+      .eq('family_id', familyId)
+      .eq('data->>key', key)
+      .limit(1)
     return !!data && data.length > 0
   }
 
-  async function markSent(key: string): Promise<void> {
+  async function markSent(familyId: string, key: string): Promise<void> {
     const id = uid()
-    await supabase.from('sync_automation_log').insert({ id, data: { id, key, createdAt: Date.now() } })
+    await supabase.from('sync_automation_log').insert({ id, family_id: familyId, data: { id, key, createdAt: Date.now() } })
   }
 
-  async function pushLog(childId: string, details: string) {
+  async function pushLog(familyId: string, childId: string, details: string) {
     const row = {
       id: uid(),
       action: 'daily_reminder_sent',
@@ -100,7 +110,9 @@ export default async function handler(req: any, res: any) {
       details,
       timestamp: Date.now(),
     }
-    await supabase.from('sync_logs').upsert({ id: row.id, data: row, updated_at: new Date().toISOString() })
+    await supabase
+      .from('sync_logs')
+      .upsert({ id: row.id, family_id: familyId, data: row, updated_at: new Date().toISOString() })
   }
 
   async function sendPush(userId: string, title: string, body: string, icon: string, link: string) {
@@ -117,35 +129,40 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  const settingsRows = await readTable<Settings>('sync_settings')
-  const settings = settingsRows[0]
-  const reminder = settings?.dailyReminder
-  if (!reminder?.enabled) {
-    res.status(200).json({ skipped: true, reason: 'disabled' })
+  const { data: families, error: familiesError } = await supabase.from('families').select('id')
+  if (familiesError) {
+    console.error('daily-reminder: lecture families échouée', familiesError.message)
+    res.status(500).json({ error: familiesError.message })
     return
   }
-  if (parisHour(now) < reminder.hour) {
-    res.status(200).json({ skipped: true, reason: 'before-configured-hour' })
-    return
-  }
-
-  const users = await readTable<User>('sync_users')
-  const children = users.filter((u) => u.role === 'child' && u.isActive)
-  const submissions = await readTable<TaskSubmission>('sync_submissions')
 
   let sent = 0
-  for (const child of children) {
-    const doneToday = submissions.some((s) => s.childId === child.id && parisDateKey(new Date(s.submittedAt)) === today)
-    if (doneToday) continue
 
-    const key = `reminder:${child.id}:${today}`
-    if (await alreadySent(key)) continue
+  for (const family of families ?? []) {
+    const familyId = family.id as string
+    const settingsRows = await readTable<Settings>('sync_settings', familyId)
+    const settings = settingsRows[0]
+    const reminder = settings?.dailyReminder
+    if (!reminder?.enabled) continue
+    if (parisHour(now) < reminder.hour) continue
 
-    const message = "N'oublie pas tes tâches du jour !"
-    await sendPush(child.id, 'Petit rappel 👋', message, '⏰', '/enfant')
-    await pushLog(child.id, `${child.name} : rappel envoyé (aucune tâche signalée aujourd'hui)`)
-    await markSent(key)
-    sent++
+    const users = await readTable<User>('sync_users', familyId)
+    const children = users.filter((u) => u.role === 'child' && u.isActive)
+    const submissions = await readTable<TaskSubmission>('sync_submissions', familyId)
+
+    for (const child of children) {
+      const doneToday = submissions.some((s) => s.childId === child.id && parisDateKey(new Date(s.submittedAt)) === today)
+      if (doneToday) continue
+
+      const key = `reminder:${child.id}:${today}`
+      if (await alreadySent(familyId, key)) continue
+
+      const message = "N'oublie pas tes tâches du jour !"
+      await sendPush(child.id, 'Petit rappel 👋', message, '⏰', '/enfant')
+      await pushLog(familyId, child.id, `${child.name} : rappel envoyé (aucune tâche signalée aujourd'hui)`)
+      await markSent(familyId, key)
+      sent++
+    }
   }
 
   res.status(200).json({ ok: true, sent })
