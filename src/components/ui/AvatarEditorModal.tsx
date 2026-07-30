@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { AVATAR_EMOJIS } from '../../lib/categories'
 import { cn } from '../../lib/cn'
 import { addPhoto, deletePhoto, removeRemoteProfilePhoto } from '../../lib/photos'
+import { useDemoMode } from '../../store/demoStore'
 import { useStore } from '../../store/useStore'
 import type { User } from '../../types'
 import { Button } from './Button'
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function AvatarEditorModal({ user, actorId, onClose }: Props) {
+  const demoActive = useDemoMode((s) => s.active)
   const updateAvatar = useStore((s) => s.updateAvatar)
   const toast = useStore((s) => s.toast)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -30,6 +32,13 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
 
   async function confirmPhoto() {
     if (!pending) return
+    // Mode démo : ni upload Supabase Storage ni écriture profile_photos — updateAvatar()
+    // (voir store/demoStore.ts) affiche déjà le message de blocage, sans appel réseau.
+    if (demoActive) {
+      updateAvatar(user.id, {}, actorId)
+      cancelPreview()
+      return
+    }
     setBusy(true)
     try {
       // Passe l'userId pour que la photo soit uploadée vers Supabase (sync cross-device)
@@ -47,6 +56,10 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
   }
 
   function removePhoto() {
+    if (demoActive) {
+      updateAvatar(user.id, {}, actorId)
+      return
+    }
     if (user.photoId) void deletePhoto(user.photoId)
     void removeRemoteProfilePhoto(user.name)
     updateAvatar(user.id, { photoId: null }, actorId)
@@ -55,6 +68,10 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
   }
 
   function pickEmoji(emoji: string) {
+    if (demoActive) {
+      updateAvatar(user.id, {}, actorId)
+      return
+    }
     void removeRemoteProfilePhoto(user.name)
     updateAvatar(user.id, { avatar: emoji, photoId: null }, actorId)
     onClose()

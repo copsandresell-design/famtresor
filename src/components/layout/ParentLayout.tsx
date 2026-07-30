@@ -18,7 +18,9 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { useCurrentUser, useStore } from '../../store/useStore'
+import { DemoBanner } from '../DemoBanner'
 import { NotificationCenter } from '../NotificationCenter'
+import { OnboardingTour } from '../OnboardingTour'
 import { AvatarEditorModal } from '../ui/AvatarEditorModal'
 import { ChildAvatar } from '../ui/ChildAvatar'
 
@@ -119,8 +121,8 @@ export function ParentLayout() {
       </aside>
 
       <div className="flex min-h-dvh flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-3 pb-2 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
-          <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-9 w-auto shrink-0" />
+        <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-3 pb-3 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
+          <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-11 w-auto shrink-0" />
           <div className="flex items-center gap-1">
             <NotificationCenter />
             <button
@@ -132,6 +134,8 @@ export function ParentLayout() {
             </button>
           </div>
         </header>
+
+        <DemoBanner />
 
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-24 lg:pb-8">
           <Outlet />
@@ -156,7 +160,7 @@ export function ParentLayout() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 350 }}
-              className="absolute inset-y-0 right-0 flex w-72 flex-col gap-1 bg-white p-4 shadow-xl dark:bg-slate-900"
+              className="absolute inset-y-0 right-0 flex w-72 flex-col gap-1 bg-white px-4 pb-4 pt-[max(env(safe-area-inset-top),1rem)] shadow-xl dark:bg-slate-900"
             >
               <div className="mb-3 flex items-center justify-between">
                 <p className="font-black">Menu</p>
@@ -192,6 +196,10 @@ export function ParentLayout() {
 
       {editingAvatar && user && (
         <AvatarEditorModal user={user} actorId={user.id} onClose={() => setEditingAvatar(false)} />
+      )}
+
+      {user && location.pathname === '/parent' && (
+        <OnboardingTour storageKey={`kidsup:onboarding:${user.id}`} />
       )}
     </div>
   )

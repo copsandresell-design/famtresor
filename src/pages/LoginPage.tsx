@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Delete } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { cn } from '../lib/cn'
 import { useStore } from '../store/useStore'
 import { ChildAvatar } from '../components/ui/ChildAvatar'
@@ -171,6 +172,13 @@ export function LoginPage() {
               />
               <p className="mt-2 text-slate-500 dark:text-slate-400">Vous êtes qui ?</p>
             </div>
+
+            <Link
+              to="/demo"
+              className="text-sm font-semibold text-slate-400 hover:text-slate-600 hover:underline dark:text-slate-500 dark:hover:text-slate-300"
+            >
+              Voir une démo →
+            </Link>
             <div className="grid w-full max-w-md grid-cols-2 gap-4">
               {users.map((user) => (
                 <motion.button

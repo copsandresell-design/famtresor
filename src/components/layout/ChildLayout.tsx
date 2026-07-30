@@ -3,7 +3,9 @@ import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { useCurrentUser, useStore } from '../../store/useStore'
+import { DemoBanner } from '../DemoBanner'
 import { NotificationCenter } from '../NotificationCenter'
+import { OnboardingTour } from '../OnboardingTour'
 import { ChildAvatar } from '../ui/ChildAvatar'
 
 const BASE_LINKS = [
@@ -31,14 +33,16 @@ export function ChildLayout() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header
-        className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-3 pb-2 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
+        className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-3 pb-3 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
         style={{ borderTopColor: user.color, borderTopWidth: 4 }}
       >
-        <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-9 w-auto shrink-0" />
+        <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-11 w-auto shrink-0" />
         <ChildAvatar user={user} size="sm" />
         <p className="min-w-0 flex-1 truncate text-base font-black">{user.name}</p>
         <NotificationCenter />
       </header>
+
+      <DemoBanner />
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 pb-24">
         <Outlet />
@@ -68,6 +72,8 @@ export function ChildLayout() {
           </NavLink>
         ))}
       </nav>
+
+      {location.pathname === '/enfant' && <OnboardingTour storageKey={`kidsup:onboarding:${user.id}`} />}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { Toaster } from './components/Toaster'
 import { UpdateBanner } from './components/UpdateBanner'
 import { useDataRealtime } from './hooks/useDataSync'
 import { useNotificationRealtime } from './hooks/useNotifications'
+import { DemoLandingPage } from './pages/DemoLandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { ChildHistoryPage } from './pages/child/ChildHistoryPage'
 import { ChildHomePage } from './pages/child/ChildHomePage'
@@ -89,6 +90,8 @@ export default function App() {
         <UpdateBanner />
         <AmbientBackground />
         <Routes>
+          {/* Toujours accessible, session ou non : point d'entrée de la démo (voir store/demoStore.ts). */}
+          <Route path="/demo" element={<DemoLandingPage />} />
           {!session && <Route path="*" element={<LoginPage />} />}
           {session?.role === 'parent' && (
             <>

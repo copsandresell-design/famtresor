@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { subscribeTable, type SyncTable } from '../lib/sync'
+import { useDemoMode } from '../store/demoStore'
 import { useStore } from '../store/useStore'
 import type {
   AuditLog,
@@ -74,12 +75,16 @@ const TABLES: { table: SyncTable; key: RemoteEntityKey }[] = [
  * et les réglages synchronisés en temps réel entre tous les appareils.
  */
 export function useDataRealtime() {
+  const demoActive = useDemoMode((s) => s.active)
   const receiveUpsert = useStore((s) => s.receiveRemoteUpsert)
   const receiveDelete = useStore((s) => s.receiveRemoteDelete)
   const receiveSettings = useStore((s) => s.receiveRemoteSettings)
   const syncFromRemote = useStore((s) => s.syncFromRemote)
 
   useEffect(() => {
+    // Mode démo : aucune donnée réelle ne doit transiter par le réseau (voir store/demoStore.ts)
+    // — on coupe entièrement la synchro Supabase tant que la démo est active.
+    if (demoActive) return
     const unsubs = TABLES.map(({ table, key }) =>
       subscribeTable<RemoteEntity>(table, (record, eventType) => {
         if (eventType === 'DELETE') receiveDelete(key, (record as { id: string }).id)
@@ -105,5 +110,5 @@ export function useDataRealtime() {
       window.removeEventListener('focus', refetch)
       unsubs.forEach((u) => u())
     }
-  }, [receiveUpsert, receiveDelete, receiveSettings, syncFromRemote])
+  }, [receiveUpsert, receiveDelete, receiveSettings, syncFromRemote, demoActive])
 }

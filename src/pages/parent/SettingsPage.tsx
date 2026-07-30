@@ -1,6 +1,7 @@
 import { ChevronRight, Medal, Sparkles, Trophy } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { OnboardingTour } from '../../components/OnboardingTour'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Field, inputCls } from '../../components/ui/Field'
@@ -216,6 +217,7 @@ export function SettingsPage() {
   const [severityMultiplier, setSeverityMultiplier] = useState(String(settings.inactivityPenalty.severityMultiplier))
   const [weeklyCapAmount, setWeeklyCapAmount] = useState(String(settings.weeklyPointsCap.amount))
   const [reminderHour, setReminderHour] = useState(String(settings.dailyReminder.hour))
+  const [showTutorial, setShowTutorial] = useState(false)
 
   if (!user) return null
 
@@ -329,6 +331,18 @@ export function SettingsPage() {
             <option value="dark">Sombre</option>
           </select>
         </Field>
+      </Card>
+
+      <Card className="flex items-center justify-between gap-3 p-5">
+        <div>
+          <h2 className="font-bold">Aide</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Le tour de présentation des points, tâches, badges et de la boutique.
+          </p>
+        </div>
+        <Button variant="soft" size="sm" onClick={() => setShowTutorial(true)}>
+          Revoir le tutoriel
+        </Button>
       </Card>
 
       <Card className="space-y-4 p-5">
@@ -668,6 +682,15 @@ export function SettingsPage() {
       </Card>
 
       {resettingSeason && <SeasonResetModal onClose={() => setResettingSeason(false)} />}
+
+      {showTutorial && (
+        <OnboardingTour
+          storageKey={`kidsup:onboarding:${user.id}`}
+          autoShow={false}
+          forceOpen
+          onDismiss={() => setShowTutorial(false)}
+        />
+      )}
     </div>
   )
 }

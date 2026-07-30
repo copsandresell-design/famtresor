@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Bell, BellOff } from 'lucide-react'
 import { getPushPermission, isPushSupported, isSubscribedToPush, subscribeToPush, unsubscribeFromPush } from '../../lib/push'
+import { useDemoMode } from '../../store/demoStore'
 import { useStore } from '../../store/useStore'
 import { Button } from './Button'
 import { Card } from './Card'
 
 /** Carte "Activer les notifications" — à placer dans Réglages (parent) et Profil (enfant). */
 export function PushNotificationsCard({ userId }: { userId: string }) {
+  const demoActive = useDemoMode((s) => s.active)
   const toast = useStore((s) => s.toast)
   const [subscribed, setSubscribed] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -21,6 +23,12 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
   if (!supported) return null
 
   async function toggle() {
+    // Mode démo : ni permission navigateur ni écriture Supabase (push_subscriptions) — voir
+    // store/demoStore.ts pour le même principe appliqué aux actions du store.
+    if (demoActive) {
+      toast('Mode démo — cette action est désactivée. Crée ton propre compte pour tout personnaliser !', 'error')
+      return
+    }
     setLoading(true)
     try {
       if (subscribed) {

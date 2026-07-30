@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { subscribeToNotifications } from '../lib/realtime'
 import { playNotificationSound } from '../lib/sound'
+import { useDemoMode } from '../store/demoStore'
 import { useStore } from '../store/useStore'
 
 /** Notifications de l'utilisateur connecté, avec actions de lecture. */
@@ -33,10 +34,13 @@ export function useNotifications() {
  * autres appareils via Supabase, et alerte l'utilisateur connecté (toast + son).
  */
 export function useNotificationRealtime() {
+  const demoActive = useDemoMode((s) => s.active)
   const receive = useStore((s) => s.receiveNotification)
   const toast = useStore((s) => s.toast)
 
   useEffect(() => {
+    // Mode démo : pas d'abonnement au canal broadcast Supabase (voir store/demoStore.ts).
+    if (demoActive) return
     return subscribeToNotifications((notif) => {
       const { session, notifications, users } = useStore.getState()
       if (notifications.some((n) => n.id === notif.id)) return
@@ -49,5 +53,5 @@ export function useNotificationRealtime() {
         playNotificationSound(notif.type === 'task_rejected' || notif.type === 'penalty' ? 'error' : 'success')
       }
     })
-  }, [receive, toast])
+  }, [receive, toast, demoActive])
 }

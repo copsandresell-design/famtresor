@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useDemoMode, useDemoStore } from './demoStore'
 import { db, load, save } from '../db/storage'
 import { defaultSettings, seedStreakDefs, seedTasks, seedUsers } from '../db/seed'
 import { computeBadges, DEFAULT_BADGE_DEFS } from '../lib/badges'
@@ -86,7 +87,7 @@ type RemoteEntity =
   | BadgeDef
   | RankDef
 
-interface Store {
+export interface Store {
   ready: boolean
   users: User[]
   tasks: Task[]
@@ -334,7 +335,7 @@ function normalizeSettings(raw: Settings): Settings {
   }
 }
 
-export const useStore = create<Store>((set, get) => {
+const useRealStore = create<Store>((set, get) => {
   function persist(
     key:
       | 'users'
@@ -547,6 +548,9 @@ export const useStore = create<Store>((set, get) => {
     toasts: [],
 
     init: async () => {
+      // Repartir du réel après une sortie du mode démo (voir store/demoStore.ts) déclenche cet
+      // effet une seconde fois côté App — déjà initialisé, il n'y a rien à refaire.
+      if (get().ready) return
       const localUsers = await load<User[]>('users', [])
       let users = localUsers
       let tasks = await load<Task[]>('tasks', [])
@@ -1751,6 +1755,25 @@ export const useStore = create<Store>((set, get) => {
     },
   }
 })
+
+/**
+ * Point d'entrée unique utilisé par toute l'app : bascule de façon transparente entre le store
+ * réel (Supabase) et le store de démo (src/store/demoStore.ts, entièrement en mémoire) selon
+ * qu'une session de démo est active. Les deux stores restent toujours appelés (jamais l'un
+ * conditionnellement à l'autre) pour respecter les règles des hooks React.
+ */
+function useStoreImpl<T>(selector: (state: Store) => T): T {
+  const demoActive = useDemoMode((s) => s.active)
+  const real = useRealStore(selector)
+  const demo = useDemoStore(selector)
+  return demoActive ? demo : real
+}
+
+function getState(): Store {
+  return useDemoMode.getState().active ? useDemoStore.getState() : useRealStore.getState()
+}
+
+export const useStore = Object.assign(useStoreImpl, { getState })
 
 export function useCurrentUser(): User | null {
   const session = useStore((s) => s.session)

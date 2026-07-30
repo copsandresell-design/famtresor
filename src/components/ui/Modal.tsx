@@ -39,7 +39,7 @@ export function Modal({ open, onClose, title, children, wide, glow }: Props) {
             exit={{ y: 32, opacity: 0 }}
             transition={{ type: 'spring', damping: 28, stiffness: 350 }}
             className={cn(
-              'relative w-full max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900',
+              'relative w-full max-h-[calc(92dvh-env(safe-area-inset-top))] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900',
               wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
               glow === 'brand' && 'glow-brand',
               glow === 'spark' && 'glow-spark',

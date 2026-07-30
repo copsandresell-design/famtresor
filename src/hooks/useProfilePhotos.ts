@@ -1,12 +1,20 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, type Database } from '../lib/supabase'
+import { useDemoMode } from '../store/demoStore'
 
 export const useProfilePhotos = () => {
+  const demoActive = useDemoMode((s) => s.active)
   const [photos, setPhotos] = useState<Record<string, string>>({}) // userId -> photoUrl
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Mode démo : aucune donnée réelle ne doit transiter par le réseau (voir store/demoStore.ts)
+    // — ce hook appelle Supabase directement, indépendamment du store, donc coupé à part.
+    if (demoActive) {
+      setLoading(false)
+      return
+    }
     // Fetch all profile photos
     const fetchPhotos = async () => {
       try {
@@ -74,7 +82,7 @@ export const useProfilePhotos = () => {
       window.removeEventListener('focus', refetch)
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [demoActive])
 
   const uploadProfilePhoto = useCallback(async (userId: string, file: File) => {
     try {
