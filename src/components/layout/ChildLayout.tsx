@@ -34,6 +34,7 @@ export function ChildLayout() {
         className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
         style={{ borderTopColor: user.color, borderTopWidth: 4 }}
       >
+        <img src="/icons/icon-source.png" alt="" className="h-7 w-7 shrink-0 rounded-lg" aria-hidden />
         <ChildAvatar user={user} size="sm" />
         <p className="min-w-0 flex-1 truncate text-base font-black">{user.name}</p>
         <NotificationCenter />

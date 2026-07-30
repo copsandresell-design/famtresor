@@ -50,3 +50,7 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// Retire l'écran de chargement statique (voir index.html) : le premier rendu React a eu
+// le temps d'être peint par-dessus, la transition est donc fluide plutôt qu'un flash.
+document.getElementById('app-splash')?.remove()

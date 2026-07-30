@@ -13,7 +13,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 // public/ — rien à committer, rien à oublier de régénérer.
 function versionFilePlugin(): Plugin {
   return {
-    name: 'famtresor-version-file',
+    name: 'kidsup-version-file',
     apply: 'build',
     // Placé après VitePWA dans le tableau de plugins (voir plus bas) : ce writeBundle
     // s'exécute donc après l'injection du manifest de précache Workbox, garantissant que
@@ -55,21 +55,24 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // Le fichier de version doit TOUJOURS aller au réseau (voir versionCheck.ts) —
         // jamais servi depuis le precache, même si globPatterns venait à inclure .json.
-        globIgnores: ['version.json'],
+        // icon-source.png n'est qu'un fichier maître gardé pour régénérer les autres
+        // icônes plus tard : l'app ne le charge jamais, inutile de le précacher.
+        globIgnores: ['version.json', 'icons/icon-source.png'],
       },
-      includeAssets: ['icons/icon.svg'],
+      includeAssets: ['icons/favicon.png'],
       manifest: {
-        name: 'FamTrésor',
-        short_name: 'FamTrésor',
-        description: "L'app familiale où les tâches ménagères rapportent de vrais euros.",
+        name: 'KidsUp',
+        short_name: 'KidsUp',
+        description: 'Les tâches du quotidien rapportent des points, des badges et de belles progressions.',
         lang: 'fr',
-        theme_color: '#FBBF24',
-        background_color: '#FFFFFF',
+        theme_color: '#911DE6',
+        background_color: '#0A0118',
         display: 'standalone',
         start_url: '/',
         icons: [
-          { src: 'icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-          { src: 'icons/icon-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icons/icon-source.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icons/icon-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),

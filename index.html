@@ -3,12 +3,62 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#FBBF24" />
-    <meta name="description" content="L'app familiale où les tâches ménagères rapportent de vrais euros." />
-    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
-    <title>FamTrésor — Les tâches qui rapportent</title>
+    <meta name="theme-color" content="#911DE6" />
+    <meta name="description" content="L'app familiale qui transforme les tâches du quotidien en points, badges et belles progressions." />
+    <link rel="icon" href="/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="KidsUp" />
+    <title>KidsUp — Les tâches qui rapportent des points</title>
+    <style>
+      /* Écran de chargement maison : affiché instantanément (avant React/Tailwind), retiré
+         du DOM juste après le premier rendu (voir src/main.tsx). Volontairement en CSS
+         inline dans le <head> plutôt que dans src/index.css, qui n'arrive qu'avec le bundle
+         JS — trop tard pour éviter le flash d'écran vide/blanc au lancement. */
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        background: radial-gradient(ellipse 900px 600px at 50% 30%, rgb(124 31 224 / 0.25), transparent), #0a0118;
+      }
+      #app-splash img {
+        width: 150px;
+        max-width: 60vw;
+        height: auto;
+      }
+      #app-splash .app-splash-bar {
+        width: 140px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.12);
+        overflow: hidden;
+      }
+      #app-splash .app-splash-bar::after {
+        content: "";
+        display: block;
+        width: 50%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #911DE6, #FF9A00);
+        animation: app-splash-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes app-splash-slide {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(220%); }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-splash" aria-hidden="true">
+      <img src="/images/kidsup-logo.png" alt="" />
+      <div class="app-splash-bar"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

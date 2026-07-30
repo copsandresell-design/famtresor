@@ -161,17 +161,15 @@ export function LoginPage() {
             className="flex flex-col items-center gap-8"
           >
             <div className="text-center">
-              <motion.div
-                initial={{ scale: 0.7, rotate: -8 }}
-                animate={{ scale: 1, rotate: 0 }}
+              <motion.img
+                src="/images/kidsup-logo.png"
+                alt="KidsUp"
+                initial={{ scale: 0.7, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', damping: 12, stiffness: 200 }}
-                className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 text-4xl shadow-lg shadow-amber-500/30"
-                aria-hidden
-              >
-                💰
-              </motion.div>
-              <h1 className="mt-4 font-display text-3xl font-black">FamTrésor</h1>
-              <p className="mt-1 text-slate-500 dark:text-slate-400">Vous êtes qui ?</p>
+                className="mx-auto w-64 max-w-[70vw] drop-shadow-[0_8px_24px_rgba(124,31,224,0.35)]"
+              />
+              <p className="mt-2 text-slate-500 dark:text-slate-400">Vous êtes qui ?</p>
             </div>
             <div className="grid w-full max-w-md grid-cols-2 gap-4">
               {users.map((user) => (
