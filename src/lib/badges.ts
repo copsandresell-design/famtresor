@@ -284,7 +284,7 @@ export const DEFAULT_BADGE_DEFS: BadgeDef[] = [
   { id: 'teamplayer', kind: 'family_points', label: 'Teamplayer', emoji: '🤝', description: '400 points cumulés par toute la fratrie ce mois-ci', points: 50, params: { threshold: 400 }, isActive: true, createdBy: 'system', createdAt: now },
   { id: 'month-mvp', kind: 'month_mvp', label: 'MVP du mois', emoji: '👑', description: 'Meilleur gain de la famille ce mois-ci', points: 150, params: {}, isActive: true, createdBy: 'system', createdAt: now },
 
-  { id: 'millionaire', kind: 'lifetime_points', label: 'Centenaire', emoji: '💰', description: '1000 points gagnés en tout', points: 200, params: { threshold: 1000 }, isActive: true, createdBy: 'system', createdAt: now },
+  { id: 'millionaire', kind: 'lifetime_points', label: 'Centenaire', emoji: '🌠', description: '1000 points gagnés en tout', points: 200, params: { threshold: 1000 }, isActive: true, createdBy: 'system', createdAt: now },
   { id: 'points-500', kind: 'lifetime_points', label: 'Premiers 500', emoji: '💵', description: '500 points gagnés en tout', points: 80, params: { threshold: 500 }, isActive: true, createdBy: 'system', createdAt: now },
   { id: 'points-2500', kind: 'lifetime_points', label: '2500 points', emoji: '🪙', description: '2500 points gagnés en tout', points: 350, params: { threshold: 2500 }, isActive: true, createdBy: 'system', createdAt: now },
   { id: 'points-5000', kind: 'lifetime_points', label: '5000 points', emoji: '🏦', description: '5000 points gagnés en tout', points: 600, params: { threshold: 5000 }, isActive: true, createdBy: 'system', createdAt: now },

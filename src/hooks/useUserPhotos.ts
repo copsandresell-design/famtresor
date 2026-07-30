@@ -13,7 +13,7 @@ export function useUserPhoto(userId: string): string | undefined {
     // Charge la photo depuis localStorage
     const loadPhoto = () => {
       try {
-        const photoIndex = JSON.parse(localStorage.getItem('famtresor_user_photos') || '{}')
+        const photoIndex = JSON.parse(localStorage.getItem('kidsup_user_photos') || '{}')
         const id = photoIndex[userId]
         setPhotoId(id || undefined)
       } catch (e) {
@@ -25,7 +25,7 @@ export function useUserPhoto(userId: string): string | undefined {
 
     // Écoute les changements de photos (même depuis d'autres onglets)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'famtresor_user_photos') {
+      if (e.key === 'kidsup_user_photos') {
         loadPhoto()
       }
     }
@@ -39,11 +39,11 @@ export function useUserPhoto(userId: string): string | undefined {
     }
 
     window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('famtresor:photo-updated', handlePhotoUpdate)
+    window.addEventListener('kidsup:photo-updated', handlePhotoUpdate)
 
     return () => {
       window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('famtresor:photo-updated', handlePhotoUpdate)
+      window.removeEventListener('kidsup:photo-updated', handlePhotoUpdate)
     }
   }, [userId])
 

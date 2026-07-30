@@ -23,7 +23,7 @@ interface PushPayload {
 }
 
 self.addEventListener('push', (event: PushEvent) => {
-  let payload: PushPayload = { title: 'FamTrésor', body: 'Nouvelle notification' }
+  let payload: PushPayload = { title: 'KidsUp', body: 'Nouvelle notification' }
   try {
     if (event.data) payload = { ...payload, ...event.data.json() }
   } catch {
@@ -33,8 +33,8 @@ self.addEventListener('push', (event: PushEvent) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: payload.icon || '/icons/icon.svg',
-      badge: '/icons/icon.svg',
+      icon: payload.icon || '/icons/icon-source.png',
+      badge: '/icons/icon-source.png',
       data: { link: payload.link || '/' },
     }),
   )

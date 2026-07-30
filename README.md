@@ -1,8 +1,8 @@
-# 💰 FamTrésor
+# 🚀 KidsUp
 
-L'app familiale où les tâches ménagères rapportent de vrais euros. PWA locale
-(aucun serveur, aucune donnée qui sort de l'appareil) pour Marion, Julien,
-Lorenzo et Kelly.
+L'app familiale où les tâches du quotidien rapportent des points, des badges
+et de belles progressions. PWA locale (aucun serveur, aucune donnée qui sort
+de l'appareil) pour Marion, Julien, Lorenzo et Kelly.
 
 ## Démarrage
 
