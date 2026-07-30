@@ -6,11 +6,13 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { inputCls } from '../../components/ui/Field'
+import { Tabs } from '../../components/ui/Tabs'
 import { CATEGORIES, CATEGORY_KEYS } from '../../lib/categories'
 import { describeRecurrence } from '../../lib/recurrence'
 import { useStore } from '../../store/useStore'
 import type { Category, Task } from '../../types'
 import { TaskFormModal } from './TaskFormModal'
+import { TaskSuggestionsSection } from './TaskSuggestionsSection'
 
 type Sort = 'recent' | 'points-desc' | 'points-asc' | 'title'
 
@@ -24,8 +26,11 @@ const SORTS: Record<Sort, { label: string; compare: (a: Task, b: Task) => number
 export function TasksPage() {
   const tasks = useStore((s) => s.tasks)
   const children = useStore((s) => s.users).filter((u) => u.role === 'child')
+  const taskSuggestions = useStore((s) => s.taskSuggestions)
+  const suggestionsEnabled = useStore((s) => s.settings.features.taskSuggestions)
   const [searchParams, setSearchParams] = useSearchParams()
 
+  const [tab, setTab] = useState<'taches' | 'propositions'>('taches')
   const [search, setSearch] = useState('')
   const [childFilter, setChildFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState<'all' | Category>('all')
@@ -33,6 +38,8 @@ export function TasksPage() {
   const [sort, setSort] = useState<Sort>('recent')
   const [editing, setEditing] = useState<Task | null>(null)
   const [creating, setCreating] = useState(false)
+
+  const pendingSuggestions = taskSuggestions.filter((s) => s.status === 'pending').length
 
   useEffect(() => {
     if (searchParams.has('nouveau')) {
@@ -61,15 +68,32 @@ export function TasksPage() {
         <div>
           <h1 className="text-2xl font-black">Tâches</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {filtered.length} sur {tasks.length}
+            {tab === 'taches' ? `${filtered.length} sur ${tasks.length}` : 'Propositions des enfants'}
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus size={18} />
-          Nouvelle tâche
-        </Button>
+        {tab === 'taches' && (
+          <Button onClick={() => setCreating(true)}>
+            <Plus size={18} />
+            Nouvelle tâche
+          </Button>
+        )}
       </div>
 
+      {suggestionsEnabled && (
+        <Tabs
+          tabs={[
+            { id: 'taches', label: 'Tâches' },
+            { id: 'propositions', label: 'Propositions', count: pendingSuggestions },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      )}
+
+      {tab === 'propositions' && suggestionsEnabled ? (
+        <TaskSuggestionsSection />
+      ) : (
+        <>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <label className="relative col-span-2 sm:col-span-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -169,6 +193,8 @@ export function TasksPage() {
         ))}
         {filtered.length === 0 && <EmptyState emoji="🔍" text="Aucune tâche ne correspond." />}
       </Card>
+        </>
+      )}
 
       {creating && <TaskFormModal open onClose={() => setCreating(false)} />}
       {editing && <TaskFormModal open task={editing} onClose={() => setEditing(null)} />}

@@ -21,6 +21,7 @@ export type SyncTable =
   | 'sync_streak_defs'
   | 'sync_badge_defs'
   | 'sync_rank_defs'
+  | 'sync_task_suggestions'
 
 export async function fetchAll<T>(table: SyncTable): Promise<T[]> {
   const { data, error } = await supabase.from(table).select('id, data')

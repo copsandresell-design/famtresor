@@ -17,6 +17,7 @@ import {
   demoStreakDefs,
   demoSubmissions,
   demoTasks,
+  demoTaskSuggestions,
   demoTransactions,
   demoUsers,
 } from '../lib/demoData'
@@ -79,6 +80,7 @@ export const useDemoStore = create<Store>((set, get) => {
     streakDefs: demoStreakDefs,
     badgeDefs: demoBadgeDefs,
     rankDefs: demoRankDefs,
+    taskSuggestions: demoTaskSuggestions,
     settings: demoSettings,
     session: storedRole ? buildDemoSession(storedRole) : null,
     toasts: [],
@@ -187,6 +189,9 @@ export const useDemoStore = create<Store>((set, get) => {
       blockToast()
       return false
     },
+    proposeTaskSuggestion: () => blockToast(),
+    approveTaskSuggestion: () => blockToast(),
+    rejectTaskSuggestion: () => blockToast(),
   }
 })
 

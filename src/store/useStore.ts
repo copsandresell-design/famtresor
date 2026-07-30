@@ -18,6 +18,7 @@ import type {
   AppNotification,
   AuditLog,
   BadgeDef,
+  Category,
   Message,
   NotificationType,
   PenaltyRule,
@@ -37,6 +38,7 @@ import type {
   StreakTier,
   Task,
   TaskSubmission,
+  TaskSuggestion,
   Transaction,
   User,
 } from '../types'
@@ -70,6 +72,7 @@ type RemoteEntityKey =
   | 'streakDefs'
   | 'badgeDefs'
   | 'rankDefs'
+  | 'taskSuggestions'
 
 type RemoteEntity =
   | User
@@ -86,6 +89,7 @@ type RemoteEntity =
   | StreakDef
   | BadgeDef
   | RankDef
+  | TaskSuggestion
 
 export interface Store {
   ready: boolean
@@ -105,6 +109,7 @@ export interface Store {
   streakDefs: StreakDef[]
   badgeDefs: BadgeDef[]
   rankDefs: RankDef[]
+  taskSuggestions: TaskSuggestion[]
   settings: Settings
   session: Session | null
   toasts: Toast[]
@@ -267,6 +272,19 @@ export interface Store {
   fulfillRedemption: (redemptionId: string, actorId: string) => void
   cancelRedemption: (redemptionId: string, actorId: string) => void
   convertPointsToMoney: (childId: string, points: number, actorId: string) => boolean
+
+  /** Idée de tâche proposée par un enfant — voir approveTaskSuggestion/rejectTaskSuggestion. */
+  proposeTaskSuggestion: (
+    childId: string,
+    input: { title: string; description?: string; icon: string; category: Category; suggestedPoints: number },
+  ) => void
+  /** Crée une vraie tâche active à partir de la proposition (le parent peut tout ajuster avant). */
+  approveTaskSuggestion: (
+    suggestionId: string,
+    patch: { title: string; description?: string; icon: string; category: Category; points: number; assignedTo: string[] },
+    actorId: string,
+  ) => void
+  rejectTaskSuggestion: (suggestionId: string, actorId: string, reason?: string) => void
 }
 
 let toastSeq = 0
@@ -288,6 +306,7 @@ const SYNCED_KEYS = [
   'streakDefs',
   'badgeDefs',
   'rankDefs',
+  'taskSuggestions',
 ] as const
 type SyncedKey = (typeof SYNCED_KEYS)[number]
 
@@ -305,6 +324,7 @@ const SYNC_TABLE_FOR: Record<SyncedKey, SyncTable> = {
   streakDefs: 'sync_streak_defs',
   badgeDefs: 'sync_badge_defs',
   rankDefs: 'sync_rank_defs',
+  taskSuggestions: 'sync_task_suggestions',
 }
 
 function syncTableFor(key: SyncedKey): SyncTable {
@@ -353,7 +373,8 @@ const useRealStore = create<Store>((set, get) => {
       | 'redemptions'
       | 'streakDefs'
       | 'badgeDefs'
-      | 'rankDefs',
+      | 'rankDefs'
+      | 'taskSuggestions',
   ) {
     const value = get()[key]
     save(key, value)
@@ -543,6 +564,7 @@ const useRealStore = create<Store>((set, get) => {
     streakDefs: [],
     badgeDefs: [],
     rankDefs: [],
+    taskSuggestions: [],
     settings: defaultSettings,
     session: null,
     toasts: [],
@@ -568,6 +590,7 @@ const useRealStore = create<Store>((set, get) => {
       let streakDefs = await load<StreakDef[]>('streakDefs', [])
       let badgeDefs = await load<BadgeDef[]>('badgeDefs', [])
       let rankDefs = await load<RankDef[]>('rankDefs', [])
+      let taskSuggestions = await load<TaskSuggestion[]>('taskSuggestions', [])
       let settings = normalizeSettings(await load<Settings>('settings', defaultSettings))
       let session = await load<Session | null>('session', null)
 
@@ -594,6 +617,7 @@ const useRealStore = create<Store>((set, get) => {
             remoteStreakDefs,
             remoteBadgeDefs,
             remoteRankDefs,
+            remoteTaskSuggestions,
           ] = await Promise.all([
             fetchAll<Task>('sync_tasks'),
             fetchAll<TaskSubmission>('sync_submissions'),
@@ -609,6 +633,7 @@ const useRealStore = create<Store>((set, get) => {
             fetchAll<StreakDef>('sync_streak_defs'),
             fetchAll<BadgeDef>('sync_badge_defs'),
             fetchAll<RankDef>('sync_rank_defs'),
+            fetchAll<TaskSuggestion>('sync_task_suggestions'),
           ])
           if (remoteTasks.length > 0) tasks = remoteTasks
           submissions = remoteSubmissions
@@ -623,6 +648,7 @@ const useRealStore = create<Store>((set, get) => {
           streakDefs = withDefaults(remoteStreakDefs, seedStreakDefs(tasks), 'sync_streak_defs')
           badgeDefs = withDefaults(remoteBadgeDefs, DEFAULT_BADGE_DEFS, 'sync_badge_defs')
           rankDefs = withDefaults(remoteRankDefs, DEFAULT_RANK_DEFS, 'sync_rank_defs')
+          taskSuggestions = remoteTaskSuggestions
           if (remoteSettingsRows.length > 0) {
             settings = normalizeSettings(remoteSettingsRows[0])
           } else {
@@ -643,6 +669,7 @@ const useRealStore = create<Store>((set, get) => {
           save('streakDefs', streakDefs)
           save('badgeDefs', badgeDefs)
           save('rankDefs', rankDefs)
+          save('taskSuggestions', taskSuggestions)
 
           // Cet appareil avait son propre id local pour l'utilisateur connecté :
           // on le fait correspondre au bon compte partagé via son nom.
@@ -702,6 +729,7 @@ const useRealStore = create<Store>((set, get) => {
           for (const d of streakDefs) pushRecord('sync_streak_defs', d.id, d)
           for (const b of badgeDefs) pushRecord('sync_badge_defs', b.id, b)
           for (const r of rankDefs) pushRecord('sync_rank_defs', r.id, r)
+          for (const s of taskSuggestions) pushRecord('sync_task_suggestions', s.id, s)
           pushRecord('sync_settings', 'main', settings)
         }
       } catch (e) {
@@ -758,6 +786,7 @@ const useRealStore = create<Store>((set, get) => {
         streakDefs,
         badgeDefs,
         rankDefs,
+        taskSuggestions,
         settings,
         session,
       })
@@ -781,6 +810,7 @@ const useRealStore = create<Store>((set, get) => {
           remoteStreakDefs,
           remoteBadgeDefs,
           remoteRankDefs,
+          remoteTaskSuggestions,
         ] = await Promise.all([
           fetchAll<User>('sync_users'),
           fetchAll<Task>('sync_tasks'),
@@ -797,6 +827,7 @@ const useRealStore = create<Store>((set, get) => {
           fetchAll<StreakDef>('sync_streak_defs'),
           fetchAll<BadgeDef>('sync_badge_defs'),
           fetchAll<RankDef>('sync_rank_defs'),
+          fetchAll<TaskSuggestion>('sync_task_suggestions'),
         ])
         if (remoteUsers.length === 0) return // rien à réconcilier (pas encore de famille distante)
         const settings = remoteSettingsRows.length > 0 ? normalizeSettings(remoteSettingsRows[0]) : get().settings
@@ -819,6 +850,7 @@ const useRealStore = create<Store>((set, get) => {
           streakDefs,
           badgeDefs,
           rankDefs,
+          taskSuggestions: remoteTaskSuggestions,
         })
         save('users', remoteUsers)
         save('tasks', remoteTasks)
@@ -832,6 +864,7 @@ const useRealStore = create<Store>((set, get) => {
         save('penaltyRules', remotePenaltyRules)
         save('shopItems', remoteShopItems)
         save('redemptions', remoteRedemptions)
+        save('taskSuggestions', remoteTaskSuggestions)
         save('streakDefs', streakDefs)
         save('badgeDefs', badgeDefs)
         save('rankDefs', rankDefs)
@@ -1752,6 +1785,107 @@ const useRealStore = create<Store>((set, get) => {
       persist('transactions')
       get().toast(`${formatEuro(cents)} ajoutés à ton solde !`)
       return true
+    },
+
+    proposeTaskSuggestion: (childId, input) => {
+      const trimmed = input.title.trim()
+      if (!trimmed || !Number.isFinite(input.suggestedPoints) || input.suggestedPoints <= 0) return
+      const suggestion: TaskSuggestion = {
+        id: uid(),
+        childId,
+        title: trimmed,
+        description: input.description?.trim() || undefined,
+        icon: input.icon,
+        category: input.category,
+        suggestedPoints: input.suggestedPoints,
+        status: 'pending',
+        createdAt: Date.now(),
+      }
+      set((s) => ({ taskSuggestions: [suggestion, ...s.taskSuggestions] }))
+      pushLog('task_suggestion_submitted', childId, `« ${trimmed} » (${input.suggestedPoints} pts suggérés)`, childId)
+      persist('taskSuggestions')
+      const child = get().users.find((u) => u.id === childId)
+      notifyParents(
+        'task_suggestion_submitted',
+        'Nouvelle proposition de tâche 💡',
+        `${child?.name ?? 'Un enfant'} propose : ${trimmed}`,
+        input.icon,
+        '/parent/taches',
+      )
+    },
+
+    approveTaskSuggestion: (suggestionId, patch, actorId) => {
+      const suggestion = get().taskSuggestions.find((s) => s.id === suggestionId)
+      if (!suggestion || suggestion.status !== 'pending') return
+      const trimmedTitle = patch.title.trim()
+      if (!trimmedTitle || patch.points <= 0 || patch.assignedTo.length === 0) return
+      const task: Task = {
+        id: uid(),
+        title: trimmedTitle,
+        description: patch.description?.trim() || undefined,
+        points: patch.points,
+        category: patch.category,
+        icon: patch.icon,
+        type: 'ponctuelle',
+        assignedTo: patch.assignedTo,
+        difficulty: 'medium',
+        createdBy: actorId,
+        createdAt: Date.now(),
+        isActive: true,
+      }
+      set((s) => ({
+        tasks: [task, ...s.tasks],
+        taskSuggestions: s.taskSuggestions.map((sug) =>
+          sug.id === suggestionId
+            ? { ...sug, status: 'approved' as const, reviewedAt: Date.now(), reviewedBy: actorId, createdTaskId: task.id }
+            : sug,
+        ),
+      }))
+      persist('tasks')
+      persist('taskSuggestions')
+      pushLog(
+        'task_suggestion_approved',
+        actorId,
+        `« ${trimmedTitle} » devient une tâche active (${task.points} pts)`,
+        suggestion.childId,
+        undefined,
+        task.id,
+      )
+      notify(
+        suggestion.childId,
+        'task_suggestion_decided',
+        'Ta proposition est acceptée ! 🎉',
+        `« ${trimmedTitle} » est maintenant une vraie tâche (+${task.points} points).`,
+        task.icon,
+        '/enfant',
+      )
+    },
+
+    rejectTaskSuggestion: (suggestionId, actorId, reason) => {
+      const suggestion = get().taskSuggestions.find((s) => s.id === suggestionId)
+      if (!suggestion || suggestion.status !== 'pending') return
+      set((s) => ({
+        taskSuggestions: s.taskSuggestions.map((sug) =>
+          sug.id === suggestionId
+            ? { ...sug, status: 'rejected' as const, reviewedAt: Date.now(), reviewedBy: actorId, rejectionReason: reason }
+            : sug,
+        ),
+      }))
+      persist('taskSuggestions')
+      pushLog(
+        'task_suggestion_rejected',
+        actorId,
+        `« ${suggestion.title} »${reason ? ` — ${reason}` : ''}`,
+        suggestion.childId,
+      )
+      notify(
+        suggestion.childId,
+        'task_suggestion_decided',
+        'Proposition non retenue',
+        `« ${suggestion.title} »${reason ? ` — ${reason}` : ''}`,
+        '😕',
+        '/enfant',
+      )
     },
   }
 })

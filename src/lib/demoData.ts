@@ -15,6 +15,7 @@ import type {
   ShopItem,
   Task,
   TaskSubmission,
+  TaskSuggestion,
   Transaction,
   User,
 } from '../types'
@@ -251,6 +252,34 @@ export const demoShopItemWish: ShopItem = { id: uid(), title: 'Sortie accrobranc
 
 export const demoShopItems: ShopItem[] = [demoShopItemCinema, demoShopItemResto, demoShopItemScreen, demoShopItemWish]
 
+export const demoTaskSuggestionCarwash: TaskSuggestion = {
+  id: uid(),
+  childId: demoMilo.id,
+  title: 'Laver la voiture avec papa',
+  description: 'Je rince pendant que quelqu’un savonne',
+  icon: '🚗',
+  category: 'autre',
+  suggestedPoints: 30,
+  status: 'pending',
+  createdAt: at(1, 11),
+}
+
+export const demoTaskSuggestionRejected: TaskSuggestion = {
+  id: uid(),
+  childId: demoSacha.id,
+  title: 'Ne rien faire et gagner des points quand même',
+  icon: '😅',
+  category: 'autre',
+  suggestedPoints: 100,
+  status: 'rejected',
+  rejectionReason: "Sympa d'essayer, mais il faut vraiment faire quelque chose ! 😄",
+  reviewedAt: at(6, 12),
+  reviewedBy: demoParent.id,
+  createdAt: at(7),
+}
+
+export const demoTaskSuggestions: TaskSuggestion[] = [demoTaskSuggestionCarwash, demoTaskSuggestionRejected]
+
 export const demoRedemptions: Redemption[] = [
   {
     id: uid(),
@@ -320,6 +349,7 @@ export const demoSettings: Settings = {
     shop: true,
     inactivityPenalties: false,
     recurringPenalties: true,
+    taskSuggestions: true,
   },
   pointsPerEuro: 100,
   inactivityPenalty: {
@@ -363,6 +393,18 @@ export const demoNotifications: AppNotification[] = [
     createdAt: at(1),
     link: '/enfant/profil',
   },
+  {
+    id: uid(),
+    userId: demoParent.id,
+    userName: demoParent.name,
+    type: 'task_suggestion_submitted',
+    title: 'Nouvelle proposition de tâche 💡',
+    message: `${demoMilo.name} propose : ${demoTaskSuggestionCarwash.title}`,
+    icon: demoTaskSuggestionCarwash.icon,
+    read: false,
+    createdAt: demoTaskSuggestionCarwash.createdAt,
+    link: '/parent/taches',
+  },
 ]
 
 export const demoLogs: AuditLog[] = [
@@ -374,4 +416,6 @@ export const demoLogs: AuditLog[] = [
   { id: uid(), action: 'penalty_applied', actorId: demoParent.id, subjectId: demoMilo.id, amount: -50, details: 'Retard au coucher', timestamp: at(3, 21) },
   { id: uid(), action: 'submission_rejected', actorId: demoParent.id, subjectId: demoSacha.id, details: `« ${taskHomework.title} » — À refaire proprement, merci !`, timestamp: at(3, 19) },
   { id: uid(), action: 'wish_submitted', actorId: demoMilo.id, subjectId: demoMilo.id, details: `« ${demoShopItemWish.title} »`, timestamp: at(2) },
+  { id: uid(), action: 'task_suggestion_submitted', actorId: demoMilo.id, subjectId: demoMilo.id, details: `« ${demoTaskSuggestionCarwash.title} » (${demoTaskSuggestionCarwash.suggestedPoints} pts suggérés)`, timestamp: demoTaskSuggestionCarwash.createdAt },
+  { id: uid(), action: 'task_suggestion_rejected', actorId: demoParent.id, subjectId: demoSacha.id, details: `« ${demoTaskSuggestionRejected.title} » — ${demoTaskSuggestionRejected.rejectionReason}`, timestamp: demoTaskSuggestionRejected.reviewedAt! },
 ].sort((a, b) => b.timestamp - a.timestamp)

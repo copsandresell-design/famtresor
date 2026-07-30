@@ -196,6 +196,12 @@ const FEATURE_LABELS: { key: keyof FeatureFlags; emoji: string; label: string; d
     description:
       'Les enfants gagnent des points (badges, séries) et les échangent contre des lots que tu définis, ou les convertissent en argent.',
   },
+  {
+    key: 'taskSuggestions',
+    emoji: '💡',
+    label: 'Propositions de tâches',
+    description: "Les enfants peuvent proposer de nouvelles tâches, à valider (et ajuster) avant qu'elles deviennent actives.",
+  },
 ]
 
 export function SettingsPage() {

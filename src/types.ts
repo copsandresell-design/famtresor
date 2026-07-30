@@ -74,6 +74,31 @@ export interface TaskSubmission {
   bonusApplied: boolean
 }
 
+export type TaskSuggestionStatus = 'pending' | 'approved' | 'rejected'
+
+/**
+ * Idée de tâche proposée par un enfant, à valider par un parent avant de devenir une vraie
+ * tâche active (voir saveTask/approveTaskSuggestion) — même principe que les vœux de boutique
+ * (ShopItem status 'proposed'), mais gardée en historique (jamais supprimée) même refusée,
+ * pour que l'enfant voie l'état de ses propositions passées.
+ */
+export interface TaskSuggestion {
+  id: string
+  childId: string
+  title: string
+  description?: string
+  icon: string
+  category: Category
+  suggestedPoints: number
+  status: TaskSuggestionStatus
+  rejectionReason?: string
+  reviewedAt?: number
+  reviewedBy?: string
+  /** Id de la tâche réellement créée à l'approbation, pour relier l'historique à la tâche active. */
+  createdTaskId?: string
+  createdAt: number
+}
+
 export interface Message {
   id: string
   fromId: string
@@ -114,6 +139,7 @@ export interface FeatureFlags {
   shop: boolean
   inactivityPenalties: boolean
   recurringPenalties: boolean
+  taskSuggestions: boolean
 }
 
 /** Pénalité automatique appliquée par le cron quotidien quand un enfant est inactif. */
@@ -188,6 +214,8 @@ export type NotificationType =
   | 'wish_decided'
   | 'redemption_requested'
   | 'redemption_fulfilled'
+  | 'task_suggestion_submitted'
+  | 'task_suggestion_decided'
 
 /** Monnaie séparée de l'argent : gagnée via tâches/badges/séries, dépensée dans la Boutique. */
 export type PointsTransactionType =

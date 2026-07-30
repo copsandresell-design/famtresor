@@ -16,6 +16,7 @@ import type {
   StreakDef,
   Task,
   TaskSubmission,
+  TaskSuggestion,
   Transaction,
   User,
 } from '../types'
@@ -35,6 +36,7 @@ type RemoteEntityKey =
   | 'streakDefs'
   | 'badgeDefs'
   | 'rankDefs'
+  | 'taskSuggestions'
 
 type RemoteEntity =
   | User
@@ -51,6 +53,7 @@ type RemoteEntity =
   | StreakDef
   | BadgeDef
   | RankDef
+  | TaskSuggestion
 
 const TABLES: { table: SyncTable; key: RemoteEntityKey }[] = [
   { table: 'sync_users', key: 'users' },
@@ -67,6 +70,7 @@ const TABLES: { table: SyncTable; key: RemoteEntityKey }[] = [
   { table: 'sync_streak_defs', key: 'streakDefs' },
   { table: 'sync_badge_defs', key: 'badgeDefs' },
   { table: 'sync_rank_defs', key: 'rankDefs' },
+  { table: 'sync_task_suggestions', key: 'taskSuggestions' },
 ]
 
 /**

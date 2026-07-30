@@ -143,6 +143,7 @@ export const defaultSettings: Settings = {
     shop: true,
     inactivityPenalties: false,
     recurringPenalties: true,
+    taskSuggestions: true,
   },
   pointsPerEuro: 100,
   inactivityPenalty: {

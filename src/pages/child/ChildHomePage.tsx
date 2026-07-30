@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Flame, Hourglass, Sparkles } from 'lucide-react'
+import { Flame, Hourglass, Plus, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PhotoPicker, type PickedPhoto } from '../../components/photos/PhotoPicker'
+import { Badge } from '../../components/ui/Badge'
 import { PointsAmount } from '../../components/ui/PointsAmount'
 import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
 import { AvatarEditorModal } from '../../components/ui/AvatarEditorModal'
@@ -10,7 +11,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ChildAvatar } from '../../components/ui/ChildAvatar'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { inputCls } from '../../components/ui/Field'
+import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { db } from '../../db/storage'
 import { computeBadges, type BadgeState } from '../../lib/badges'
@@ -18,7 +19,8 @@ import { computeBalance } from '../../lib/balance'
 import { computeLifetimePoints, computePoints } from '../../lib/points'
 import { computeLevel } from '../../lib/levels'
 import { computeRank } from '../../lib/ranks'
-import { DIFFICULTIES } from '../../lib/categories'
+import { CATEGORIES, CATEGORY_KEYS, DIFFICULTIES, TASK_EMOJIS } from '../../lib/categories'
+import { cn } from '../../lib/cn'
 import { celebrateFireworks } from '../../lib/confetti'
 import { playCelebrationSound } from '../../lib/sound'
 import { childGradient, gradientEnd } from '../../lib/colors'
@@ -26,7 +28,7 @@ import { formatEuro, formatRelative } from '../../lib/format'
 import { isTaskAvailable, timesSubmittedToday } from '../../lib/recurrence'
 import { computeStreak, computeStreakDefCount } from '../../lib/streak'
 import { useCurrentUser, useStore } from '../../store/useStore'
-import type { RankDef, Task } from '../../types'
+import type { Category, RankDef, Task } from '../../types'
 
 function DifficultyDots({ level }: { level: keyof typeof DIFFICULTIES }) {
   const { label, dots } = DIFFICULTIES[level]
@@ -90,6 +92,106 @@ function RankUpModal({ rank, onClose }: { rank: RankDef; onClose: () => void }) 
   )
 }
 
+function ProposeTaskModal({ childId, onClose }: { childId: string; onClose: () => void }) {
+  const proposeTaskSuggestion = useStore((s) => s.proposeTaskSuggestion)
+  const toast = useStore((s) => s.toast)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [category, setCategory] = useState<Category>('autre')
+  const [icon, setIcon] = useState(TASK_EMOJIS[0])
+  const [points, setPoints] = useState('15')
+
+  function submit() {
+    const pointsValue = parseInt(points, 10)
+    if (!title.trim()) {
+      toast('Donne un nom à ta tâche.', 'error')
+      return
+    }
+    if (!Number.isFinite(pointsValue) || pointsValue <= 0) {
+      toast('Indique un nombre de points valide.', 'error')
+      return
+    }
+    proposeTaskSuggestion(childId, {
+      title,
+      description: description.trim() || undefined,
+      icon,
+      category,
+      suggestedPoints: pointsValue,
+    })
+    toast('Proposition envoyée à tes parents ! 💡')
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Proposer une tâche">
+      <div className="space-y-4">
+        <Field label="Le nom de la tâche">
+          <input
+            className={inputCls}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="ex : Laver la voiture"
+            maxLength={60}
+            autoFocus
+          />
+        </Field>
+        <Field label="Description (optionnel)">
+          <input
+            className={inputCls}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="ex : je rince pendant que papa savonne"
+          />
+        </Field>
+        <Field label="Catégorie">
+          <select className={inputCls} value={category} onChange={(e) => setCategory(e.target.value as Category)}>
+            {CATEGORY_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {CATEGORIES[key].emoji} {CATEGORIES[key].label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Icône">
+          <div className="flex flex-wrap gap-1.5">
+            {TASK_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => setIcon(emoji)}
+                aria-pressed={icon === emoji}
+                className={cn(
+                  'rounded-lg p-1.5 text-xl cursor-pointer',
+                  icon === emoji ? 'bg-amber-200 dark:bg-amber-400/30' : 'hover:bg-slate-100 dark:hover:bg-slate-800',
+                )}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Combien de points proposes-tu ?">
+          <input
+            className={inputCls}
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={points}
+            onChange={(e) => setPoints(e.target.value)}
+          />
+          <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+            Un parent pourra ajuster ce nombre avant d'accepter.
+          </span>
+        </Field>
+        <Button className="w-full" onClick={submit}>
+          Envoyer à mes parents
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 export function ChildHomePage() {
   const user = useCurrentUser()
   const users = useStore((s) => s.users)
@@ -104,6 +206,7 @@ export function ChildHomePage() {
   const badgeDefs = useStore((s) => s.badgeDefs)
   const rankDefs = useStore((s) => s.rankDefs)
   const messages = useStore((s) => s.messages)
+  const taskSuggestions = useStore((s) => s.taskSuggestions)
   const settings = useStore((s) => s.settings)
   const submitTask = useStore((s) => s.submitTask)
   const toast = useStore((s) => s.toast)
@@ -115,6 +218,7 @@ export function ChildHomePage() {
   const [unlockedBadge, setUnlockedBadge] = useState<BadgeState | null>(null)
   const [rankedUpTo, setRankedUpTo] = useState<RankDef | null>(null)
   const [editingAvatar, setEditingAvatar] = useState(false)
+  const [proposingTask, setProposingTask] = useState(false)
 
   const childId = user?.id
 
@@ -256,6 +360,7 @@ export function ChildHomePage() {
   const balance = computeBalance(transactions, childId)
   const points = computePoints(pointsTransactions, childId)
   const pending = submissions.filter((s) => s.childId === childId && s.status === 'pending')
+  const mySuggestions = taskSuggestions.filter((s) => s.childId === childId)
   const recentPoints = pointsTransactions.filter((p) => p.childId === childId).slice(0, 5)
   const myGoals = savingsGoals.filter((g) => g.childId === childId)
   const topGoal = myGoals.length
@@ -472,6 +577,38 @@ export function ChildHomePage() {
         </div>
       </section>
 
+      {settings.features.taskSuggestions && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold">Mes propositions</h2>
+            <Button variant="soft" size="sm" onClick={() => setProposingTask(true)}>
+              <Plus size={16} />
+              Proposer une tâche
+            </Button>
+          </div>
+          {mySuggestions.length > 0 && (
+            <Card className="divide-y divide-slate-100 dark:divide-slate-800">
+              {mySuggestions.map((sug) => (
+                <div key={sug.id} className="flex items-center gap-3 px-4 py-3">
+                  <span className="text-xl" aria-hidden>
+                    {sug.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{sug.title}</p>
+                    {sug.status === 'rejected' && sug.rejectionReason && (
+                      <p className="mt-0.5 truncate text-xs text-rose-500">{sug.rejectionReason}</p>
+                    )}
+                  </div>
+                  <Badge tone={sug.status === 'approved' ? 'green' : sug.status === 'rejected' ? 'red' : 'amber'}>
+                    {sug.status === 'approved' ? 'Acceptée ✅' : sug.status === 'rejected' ? 'Refusée' : 'En attente'}
+                  </Badge>
+                </div>
+              ))}
+            </Card>
+          )}
+        </section>
+      )}
+
       {pending.length > 0 && (
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-lg font-bold">
@@ -566,6 +703,8 @@ export function ChildHomePage() {
       {editingAvatar && (
         <AvatarEditorModal user={user} actorId={user.id} onClose={() => setEditingAvatar(false)} />
       )}
+
+      {proposingTask && <ProposeTaskModal childId={childId} onClose={() => setProposingTask(false)} />}
     </div>
   )
 }

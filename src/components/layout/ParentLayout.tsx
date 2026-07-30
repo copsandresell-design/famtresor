@@ -96,7 +96,7 @@ export function ParentLayout() {
     <div className="min-h-dvh lg:flex">
       <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:gap-1 lg:border-r lg:border-slate-200 lg:bg-white lg:p-4 dark:lg:border-slate-800 dark:lg:bg-slate-900">
         <div className="mb-2 flex items-center justify-between gap-2 px-2">
-          <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-11 w-auto shrink-0" />
+          <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-14 w-auto shrink-0" />
           <NotificationCenter align="left" />
         </div>
         {user && (
@@ -121,8 +121,8 @@ export function ParentLayout() {
       </aside>
 
       <div className="flex min-h-dvh flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-3 pb-3 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
-          <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-11 w-auto shrink-0" />
+        <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-3 pb-4 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
+          <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-14 w-auto shrink-0" />
           <div className="flex items-center gap-1">
             <NotificationCenter />
             <button
