@@ -93,8 +93,11 @@ export function ParentLayout() {
   return (
     <div className="min-h-dvh lg:flex">
       <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:gap-1 lg:border-r lg:border-slate-200 lg:bg-white lg:p-4 dark:lg:border-slate-800 dark:lg:bg-slate-900">
-        <div className="mb-2 flex items-center justify-between px-3">
-          <p className="text-lg font-black">💰 {settings.familyName}</p>
+        <div className="mb-2 flex items-center justify-between gap-2 px-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-7 w-auto shrink-0" />
+            <p className="truncate text-sm font-black">{settings.familyName}</p>
+          </div>
           <NotificationCenter align="left" />
         </div>
         {user && (
@@ -119,8 +122,11 @@ export function ParentLayout() {
       </aside>
 
       <div className="flex min-h-dvh flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
-          <p className="text-base font-black">💰 {settings.familyName}</p>
+        <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex min-w-0 items-center gap-2">
+            <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-6 w-auto shrink-0" />
+            <p className="truncate text-sm font-black">{settings.familyName}</p>
+          </div>
           <div className="flex items-center gap-1">
             <NotificationCenter />
             <button
