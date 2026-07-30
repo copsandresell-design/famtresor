@@ -228,7 +228,7 @@ export function ChildProfilePage() {
                     aria-label={`Progression ${badge.label}`}
                   >
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
+                      className="h-full rounded-full bg-gradient-to-r from-brand-from to-brand-to"
                       style={{ width: `${(badge.progress.current / badge.progress.target) * 100}%` }}
                     />
                   </div>

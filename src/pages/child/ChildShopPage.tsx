@@ -189,7 +189,7 @@ export function ChildShopPage() {
       if (seen !== null) {
         const fresh = fulfilled.find((r) => !seen.includes(r.id))
         if (fresh) {
-          celebrateFireworks(['#8B5CF6', '#EC4899'])
+          celebrateFireworks(['#911DE6', '#FF9A00', '#FFE066'])
           playCelebrationSound()
           setUnboxing(fresh)
         }
@@ -249,7 +249,7 @@ export function ChildShopPage() {
                 onClick={() => {
                   const ok = redeemShopItem(user.id, item.id, user.id)
                   if (ok) {
-                    celebrate(['#8B5CF6', '#EC4899'])
+                    celebrate(['#911DE6', '#FF9A00', '#FFE066'])
                     toast('Demandé ! Un parent va te le remettre. 🎁')
                   }
                 }}

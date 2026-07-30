@@ -44,7 +44,7 @@ function GoalCard({ goal, balance, canDelete, onDelete }: {
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
         <motion.div
-          className={`h-full rounded-full ${reached ? 'bg-emerald-500' : 'bg-gradient-to-r from-blue-500 to-violet-500'}`}
+          className={`h-full rounded-full ${reached ? 'bg-emerald-500' : 'bg-gradient-to-r from-brand-from to-brand-to'}`}
           initial={{ width: 0 }}
           animate={{ width: `${progress * 100}%` }}
           transition={{ type: 'spring', damping: 20 }}
@@ -146,7 +146,7 @@ export function SavingsGoalsSection({
                   onClick={() => setIcon(emoji)}
                   className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl transition-all ${
                     icon === emoji
-                      ? 'bg-gradient-to-br from-blue-500 to-violet-500 scale-105'
+                      ? 'bg-gradient-to-br from-brand-from to-brand-to scale-105'
                       : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700'
                   }`}
                   aria-label={`Choisir ${emoji}`}

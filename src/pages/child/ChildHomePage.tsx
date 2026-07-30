@@ -384,7 +384,7 @@ export function ChildHomePage() {
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
+                className="h-full rounded-full bg-gradient-to-r from-brand-from to-brand-to"
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.min(100, (balance / topGoal.targetAmount) * 100)}%` }}
                 transition={{ type: 'spring', damping: 20, delay: 0.2 }}
