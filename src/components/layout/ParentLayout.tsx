@@ -77,8 +77,8 @@ export function ParentLayout() {
           isActive
             ? mobile
               ? 'text-amber-600 dark:text-amber-400'
-              : 'bg-gradient-to-r from-amber-400/15 to-orange-500/10 text-amber-900 shadow-[inset_0_0_0_1px] shadow-amber-500/20 dark:text-amber-300'
-            : 'text-slate-600 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-800',
+              : 'glow-brand bg-gradient-to-r from-amber-400/15 to-orange-500/10 text-amber-900 dark:text-amber-300'
+            : 'text-slate-600 hover:bg-brand-from/10 dark:text-slate-300 dark:hover:bg-brand-from/15',
         )
       }
     >
@@ -93,11 +93,8 @@ export function ParentLayout() {
   return (
     <div className="min-h-dvh lg:flex">
       <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:gap-1 lg:border-r lg:border-slate-200 lg:bg-white lg:p-4 dark:lg:border-slate-800 dark:lg:bg-slate-900">
-        <div className="mb-2 flex items-center justify-between gap-2 px-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-7 w-auto shrink-0" />
-            <p className="truncate text-sm font-black">{settings.familyName}</p>
-          </div>
+        <div className="mb-2 flex items-center justify-between gap-2 px-2">
+          <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-11 w-auto shrink-0" />
           <NotificationCenter align="left" />
         </div>
         {user && (
@@ -122,11 +119,8 @@ export function ParentLayout() {
       </aside>
 
       <div className="flex min-h-dvh flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
-          <div className="flex min-w-0 items-center gap-2">
-            <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-6 w-auto shrink-0" />
-            <p className="truncate text-sm font-black">{settings.familyName}</p>
-          </div>
+        <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-3 py-2 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/90">
+          <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-9 w-auto shrink-0" />
           <div className="flex items-center gap-1">
             <NotificationCenter />
             <button
