@@ -6,7 +6,7 @@ type Size = 'sm' | 'md' | 'lg'
 
 const variants: Record<Variant, string> = {
   primary:
-    'bg-gradient-to-r from-brand-from to-brand-to text-white shadow-md shadow-violet-500/25 hover:brightness-110 hover:-translate-y-px',
+    'glow-brand bg-gradient-to-r from-brand-from to-brand-to text-white hover:brightness-110 hover:-translate-y-px',
   success:
     'bg-gradient-to-r from-emerald-500 to-lime-500 text-white shadow-md shadow-emerald-500/25 hover:brightness-110 hover:-translate-y-px',
   danger:

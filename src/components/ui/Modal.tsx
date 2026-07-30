@@ -9,9 +9,10 @@ interface Props {
   title: string
   children: ReactNode
   wide?: boolean
+  glow?: 'brand' | 'spark'
 }
 
-export function Modal({ open, onClose, title, children, wide }: Props) {
+export function Modal({ open, onClose, title, children, wide, glow }: Props) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -40,6 +41,8 @@ export function Modal({ open, onClose, title, children, wide }: Props) {
             className={cn(
               'relative w-full max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900',
               wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
+              glow === 'brand' && 'glow-brand',
+              glow === 'spark' && 'glow-spark',
             )}
           >
             <div className="mb-4 flex items-center justify-between gap-4">

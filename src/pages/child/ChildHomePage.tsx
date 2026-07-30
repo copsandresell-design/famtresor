@@ -44,7 +44,7 @@ function DifficultyDots({ level }: { level: keyof typeof DIFFICULTIES }) {
 
 function BadgeUnlockModal({ badge, onClose }: { badge: BadgeState; onClose: () => void }) {
   return (
-    <Modal open onClose={onClose} title="Badge débloqué !">
+    <Modal open onClose={onClose} title="Badge débloqué !" glow="spark">
       <div className="flex flex-col items-center gap-3 pb-2 text-center">
         <motion.span
           className="text-7xl"
@@ -67,7 +67,7 @@ function BadgeUnlockModal({ badge, onClose }: { badge: BadgeState; onClose: () =
 
 function RankUpModal({ rank, onClose }: { rank: RankDef; onClose: () => void }) {
   return (
-    <Modal open onClose={onClose} title="Nouveau rang !">
+    <Modal open onClose={onClose} title="Nouveau rang !" glow="spark">
       <div className="flex flex-col items-center gap-3 pb-2 text-center">
         <motion.span
           className="text-7xl"
