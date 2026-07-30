@@ -37,7 +37,7 @@ export function PhotoLightbox({ photoIds, startIndex, onClose }: Props) {
       <button
         onClick={onClose}
         aria-label="Fermer"
-        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 cursor-pointer"
+        className="absolute right-4 top-[max(env(safe-area-inset-top),1rem)] rounded-full bg-white/10 p-2 text-white hover:bg-white/20 cursor-pointer"
       >
         <X size={22} />
       </button>

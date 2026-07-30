@@ -17,7 +17,7 @@ export function UpdateBanner() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -80, opacity: 0 }}
           transition={{ type: 'spring', damping: 24, stiffness: 300 }}
-          className="fixed inset-x-0 top-0 z-[70] flex items-center justify-center gap-3 bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg"
+          className="fixed inset-x-0 top-0 z-[70] flex items-center justify-center gap-3 bg-gradient-to-r from-blue-600 to-violet-600 px-4 pb-2.5 pt-[max(env(safe-area-inset-top),0.625rem)] text-sm font-semibold text-white shadow-lg"
         >
           <RefreshCw size={16} aria-hidden />
           Nouvelle version disponible

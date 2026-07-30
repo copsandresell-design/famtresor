@@ -73,7 +73,7 @@ export function NotificationCenter({ align = 'right' }: { align?: 'left' | 'righ
               transition={{ type: 'spring', damping: 28, stiffness: 400 }}
               className={cn(
                 'z-50 flex max-h-[70vh] flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900',
-                'fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:w-88',
+                'fixed inset-x-3 top-[calc(max(env(safe-area-inset-top),0.5rem)+3.5rem)] sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:w-88',
                 align === 'right' ? 'sm:right-0' : 'sm:left-0',
               )}
             >

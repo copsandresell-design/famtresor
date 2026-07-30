@@ -57,14 +57,23 @@ const splashTimer = setInterval(() => {
   if (splashProgress > 88) clearInterval(splashTimer)
 }, 80)
 
+// Durée minimale d'affichage de l'écran de chargement : render() ne bloque pas, donc sans ce
+// délai le splash disparaît quasi instantanément (le montage React prend quelques ms, pas les
+// 1,5-2s voulues pour que l'animation de la barre soit visible).
+const SPLASH_MIN_DURATION = 1600
+const splashStart = performance.now()
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 )
 
-// Retire l'écran de chargement statique (voir index.html) : le premier rendu React a eu
-// le temps d'être peint par-dessus, la transition est donc fluide plutôt qu'un flash.
-clearInterval(splashTimer)
-if (splashBarFill) splashBarFill.style.width = '100%'
-setTimeout(() => document.getElementById('app-splash')?.remove(), 200)
+// Retire l'écran de chargement statique (voir index.html) une fois la durée minimale écoulée
+// (ou immédiatement si le montage React a lui-même dépassé ce délai).
+const remaining = Math.max(0, SPLASH_MIN_DURATION - (performance.now() - splashStart))
+setTimeout(() => {
+  clearInterval(splashTimer)
+  if (splashBarFill) splashBarFill.style.width = '100%'
+  setTimeout(() => document.getElementById('app-splash')?.remove(), 200)
+}, remaining)

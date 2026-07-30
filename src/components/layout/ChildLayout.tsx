@@ -31,7 +31,7 @@ export function ChildLayout() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header
-        className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-3 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
+        className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-3 pb-2 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
         style={{ borderTopColor: user.color, borderTopWidth: 4 }}
       >
         <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-9 w-auto shrink-0" />
