@@ -21,7 +21,7 @@ export function Switch({ checked, onChange, label, disabled }: Props) {
       className={cn(
         'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors cursor-pointer',
         'disabled:opacity-50 disabled:pointer-events-none',
-        checked ? 'bg-gradient-to-r from-blue-500 to-violet-500' : 'bg-slate-300 dark:bg-slate-700',
+        checked ? 'bg-gradient-to-r from-brand-from to-brand-to' : 'bg-slate-300 dark:bg-slate-700',
       )}
     >
       <motion.span

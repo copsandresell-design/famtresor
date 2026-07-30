@@ -5,9 +5,13 @@
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --color-family: #FBBF24;
-  --color-brand-from: #6366F1;
-  --color-brand-to: #EC4899;
+  /* Palette extraite du logo KidsUp (fusée violette, traînée orange/or, étincelles) —
+     voir public/images/kidsup-logo.png. Valeurs échantillonnées directement sur
+     l'illustration plutôt qu'un violet/orange générique. */
+  --color-family: #F59E0B;
+  --color-brand-from: #911DE6;
+  --color-brand-to: #FF9A00;
+  --color-accent-spark: #FFE066;
 }
 
 @layer base {
@@ -24,18 +28,35 @@ html {
 body {
   @apply text-slate-900 font-sans antialiased dark:text-slate-100;
   /* Fond doux légèrement teinté plutôt qu'un gris plat : donne plus de profondeur
-     à l'app sans nuire à la lisibilité des cartes posées dessus. */
+     à l'app sans nuire à la lisibilité des cartes posées dessus. Halos recalés sur
+     la palette du logo (violet → orange) au lieu de l'ancien indigo → rose. */
   background:
-    radial-gradient(ellipse 900px 500px at 15% -10%, rgb(99 102 241 / 0.06), transparent),
-    radial-gradient(ellipse 900px 500px at 85% 110%, rgb(236 72 153 / 0.05), transparent),
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgb(145 29 230 / 0.06), transparent),
+    radial-gradient(ellipse 900px 500px at 85% 110%, rgb(255 154 0 / 0.05), transparent),
     #f1f5f9;
 }
 
 .dark body {
-  background:
-    radial-gradient(ellipse 900px 500px at 15% -10%, rgb(99 102 241 / 0.12), transparent),
-    radial-gradient(ellipse 900px 500px at 85% 110%, rgb(236 72 153 / 0.08), transparent),
-    #020617;
+  background-color: #020617;
+  /* Même esprit "nuit étoilée" que le logo : deux halos violet/orange, et un semis
+     très discret de petits points dorés qui rappelle les étincelles de l'illustration
+     (uniquement en sombre — resterait trop chargé sur fond clair). */
+  background-image:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgb(145 29 230 / 0.16), transparent),
+    radial-gradient(ellipse 900px 500px at 85% 110%, rgb(255 154 0 / 0.09), transparent),
+    radial-gradient(rgb(255 224 102 / 0.45) 1px, transparent 1.5px),
+    radial-gradient(rgb(255 224 102 / 0.3) 1px, transparent 1.5px);
+  background-size:
+    auto,
+    auto,
+    180px 180px,
+    260px 260px;
+  background-position:
+    0 0,
+    0 0,
+    0 0,
+    90px 130px;
+  background-repeat: no-repeat, no-repeat, repeat, repeat;
 }
 
 ::selection {
