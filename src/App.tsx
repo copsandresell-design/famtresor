@@ -77,7 +77,7 @@ export default function App() {
       <div className="flex min-h-dvh items-center justify-center">
         <UpdateBanner />
         <p className="animate-pulse text-4xl" aria-label="Chargement">
-          ð°
+          🚀
         </p>
       </div>
     )
@@ -101,7 +101,7 @@ export default function App() {
                 <Route
                   path="stats"
                   element={
-                    <Suspense fallback={<p className="animate-pulse text-center text-2xl">ð</p>}>
+                    <Suspense fallback={<p className="animate-pulse text-center text-2xl">📊</p>}>
                       <StatsPage />
                     </Suspense>
                   }
