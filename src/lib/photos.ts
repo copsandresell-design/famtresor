@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { uid } from './id'
 
-export const photosDb = localforage.createInstance({ name: 'famtresor', storeName: 'photos' })
+export const photosDb = localforage.createInstance({ name: 'kidsup', storeName: 'photos' })
 
 export interface StoredPhoto {
   id: string

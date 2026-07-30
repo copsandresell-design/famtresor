@@ -39,5 +39,5 @@ export const DEFAULT_RANK_DEFS: RankDef[] = [
   { id: 'confirme', label: 'Confirmé', emoji: '🎖️', color: '#8B5CF6', threshold: 2000, createdBy: 'system', createdAt: Date.now() },
   { id: 'expert', label: 'Expert', emoji: '🥇', color: '#F59E0B', threshold: 4000, createdBy: 'system', createdAt: Date.now() },
   { id: 'champion-maison', label: 'Champion de la maison', emoji: '🏅', color: '#F97316', threshold: 8000, createdBy: 'system', createdAt: Date.now() },
-  { id: 'legende', label: 'Légende de FamTrésor', emoji: '👑', color: '#EAB308', threshold: 15000, createdBy: 'system', createdAt: Date.now() },
+  { id: 'legende', label: 'Légende de KidsUp', emoji: '👑', color: '#EAB308', threshold: 15000, createdBy: 'system', createdAt: Date.now() },
 ]

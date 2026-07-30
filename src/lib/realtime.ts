@@ -4,7 +4,7 @@ import type { AppNotification } from '../types'
 // Canal broadcast Supabase : diffuse les notifications entre appareils
 // sans passer par une table (les données restent locales à la famille).
 
-const CHANNEL = 'famtresor-notifications'
+const CHANNEL = 'kidsup-notifications'
 const EVENT = 'notification'
 
 let channel: ReturnType<typeof supabase.channel> | null = null

@@ -82,7 +82,7 @@ export function LogsPage() {
   }, [logs, users, childFilter, actionFilter, actorFilter, from, to, search])
 
   function exportCsv() {
-    downloadCsv(`journal-famtresor-${new Date().toISOString().slice(0, 10)}.csv`, [
+    downloadCsv(`journal-kidsup-${new Date().toISOString().slice(0, 10)}.csv`, [
       ['Date', 'Heure', 'Acteur', 'Action', 'Enfant', 'Montant', 'Détails'],
       ...filtered.map((log) => [
         formatDateShort(log.timestamp),

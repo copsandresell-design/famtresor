@@ -9,8 +9,8 @@
 // identifiant de build à chaque lancement et, en cas de différence, nettoie tout
 // (service workers + caches) et recharge — donc marche même si le SW n'a jamais atteint
 // l'état "waiting" correctement.
-const VERSION_KEY = 'famtresor_app_version'
-const JUST_UPDATED_KEY = 'famtresor_just_updated'
+const VERSION_KEY = 'kidsup_app_version'
+const JUST_UPDATED_KEY = 'kidsup_just_updated'
 
 interface VersionPayload {
   version?: string

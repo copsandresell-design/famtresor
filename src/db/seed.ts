@@ -29,11 +29,11 @@ async function makeUser(
 export async function seedUsers(): Promise<User[]> {
   return Promise.all([
     makeUser(
-      { role: 'parent', name: 'Marion', email: 'marion@famtresor.family', avatar: '🌸', color: '#F59E0B' },
+      { role: 'parent', name: 'Marion', email: 'marion@kidsup.family', avatar: '🌸', color: '#F59E0B' },
       DEFAULT_SECRETS.Marion,
     ),
     makeUser(
-      { role: 'parent', name: 'Julien', email: 'julien@famtresor.family', avatar: '🎸', color: '#F59E0B' },
+      { role: 'parent', name: 'Julien', email: 'julien@kidsup.family', avatar: '🎸', color: '#F59E0B' },
       DEFAULT_SECRETS.Julien,
     ),
     makeUser(
@@ -132,7 +132,7 @@ export function seedStreakDefs(tasks: Task[]): StreakDef[] {
 }
 
 export const defaultSettings: Settings = {
-  familyName: 'FamTrésor',
+  familyName: 'KidsUp',
   initiativeBonus: 15,
   minBalance: -1000,
   theme: 'dark',

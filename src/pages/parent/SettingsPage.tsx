@@ -222,7 +222,7 @@ export function SettingsPage() {
   function saveRules() {
     updateSettings(
       {
-        familyName: familyName.trim() || 'FamTrésor',
+        familyName: familyName.trim() || 'KidsUp',
         initiativeBonus: Math.max(0, parseInt(bonus, 10) || 0),
         minBalance: Math.min(0, euroToCents(minBalance)),
       },

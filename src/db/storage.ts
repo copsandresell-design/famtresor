@@ -1,6 +1,6 @@
 import localforage from 'localforage'
 
-export const db = localforage.createInstance({ name: 'famtresor', storeName: 'data' })
+export const db = localforage.createInstance({ name: 'kidsup', storeName: 'data' })
 
 export async function load<T>(key: string, fallback: T): Promise<T> {
   return (await db.getItem<T>(key)) ?? fallback
