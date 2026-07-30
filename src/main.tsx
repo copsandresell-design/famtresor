@@ -45,6 +45,18 @@ if ('serviceWorker' in navigator) {
 // Fire-and-forget : ne doit jamais retarder l'affichage initial.
 void checkForNewVersion()
 
+// Progression simulée de la barre de chargement (voir index.html) : pas de vrai signal de
+// chargement à mesurer ici (les modules sont déjà tous chargés quand ce script s'exécute), donc
+// on anime rapidement vers ~90% pendant que React se monte, puis on saute à 100% une fois le
+// rendu lancé — donne une impression de progression réelle plutôt qu'un remplissage instantané.
+const splashBarFill = document.getElementById('app-splash-bar-fill')
+let splashProgress = 0
+const splashTimer = setInterval(() => {
+  splashProgress += (90 - splashProgress) * 0.25
+  if (splashBarFill) splashBarFill.style.width = `${splashProgress}%`
+  if (splashProgress > 88) clearInterval(splashTimer)
+}, 80)
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
@@ -53,4 +65,6 @@ createRoot(document.getElementById('root')!).render(
 
 // Retire l'écran de chargement statique (voir index.html) : le premier rendu React a eu
 // le temps d'être peint par-dessus, la transition est donc fluide plutôt qu'un flash.
-document.getElementById('app-splash')?.remove()
+clearInterval(splashTimer)
+if (splashBarFill) splashBarFill.style.width = '100%'
+setTimeout(() => document.getElementById('app-splash')?.remove(), 200)
