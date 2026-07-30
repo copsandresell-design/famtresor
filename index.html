@@ -54,6 +54,62 @@
       <div class="app-splash-bar"><div class="app-splash-bar-fill" id="app-splash-bar-fill"></div></div>
     </div>
     <div id="root"></div>
+    <script>
+      // Filet de secours de dernier recours, volontairement hors du bundle Vite (donc actif
+      // même si /src/main.tsx ne s'exécute jamais) : un visiteur avec un service worker et
+      // des caches périmés d'une visite précédente peut se retrouver bloqué sur cet écran de
+      // chargement statique indéfiniment — un ancien SW peut intercepter la navigation ou
+      // servir des ressources qui ne correspondent plus au HTML fraîchement déployé, avant
+      // même que le code React (et son propre filet, voir lib/versionCheck.ts) ait la
+      // moindre chance de s'exécuter. Si #app-splash est toujours là passé ce délai, on
+      // nettoie tout et on recharge une seule fois (protégé par sessionStorage contre une
+      // boucle infinie si le rechargement ne résout rien).
+      (function () {
+        var RECOVERY_FLAG = 'kidsup_watchdog_recovered'
+        var TIMEOUT_MS = 8000
+        setTimeout(function () {
+          if (!document.getElementById('app-splash')) return // l'app a pris le relais normalement
+          try {
+            if (sessionStorage.getItem(RECOVERY_FLAG) === '1') return
+            sessionStorage.setItem(RECOVERY_FLAG, '1')
+          } catch (e) {
+            // Stockage indisponible : on tente quand même le nettoyage une fois, sans garde-fou.
+          }
+          var cleanupTasks = []
+          if ('serviceWorker' in navigator) {
+            cleanupTasks.push(
+              navigator.serviceWorker
+                .getRegistrations()
+                .then(function (regs) {
+                  return Promise.all(
+                    regs.map(function (r) {
+                      return r.unregister()
+                    }),
+                  )
+                })
+                .catch(function () {}),
+            )
+          }
+          if (window.caches) {
+            cleanupTasks.push(
+              caches
+                .keys()
+                .then(function (keys) {
+                  return Promise.all(
+                    keys.map(function (k) {
+                      return caches.delete(k)
+                    }),
+                  )
+                })
+                .catch(function () {}),
+            )
+          }
+          Promise.all(cleanupTasks).finally(function () {
+            window.location.reload()
+          })
+        }, TIMEOUT_MS)
+      })()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

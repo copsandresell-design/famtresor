@@ -11,9 +11,49 @@
 // l'état "waiting" correctement.
 const VERSION_KEY = 'kidsup_app_version'
 const JUST_UPDATED_KEY = 'kidsup_just_updated'
+const SUPPRESS_CONTROLLERCHANGE_KEY = 'kidsup_suppress_controllerchange_reload'
 
 interface VersionPayload {
   version?: string
+}
+
+/**
+ * Verrou partagé entre CE mécanisme et celui, indépendant, du service worker
+ * (voir le handler 'controllerchange' dans main.tsx) : les deux détectent la même mise à
+ * jour par des voies différentes (comparaison de version.json vs événement du navigateur) et
+ * peuvent donc décider de recharger la page chacun de leur côté, en même temps. Sans
+ * coordination, ça produit une cascade de rechargements en chaîne (repro : voir l'historique
+ * de session) au lieu d'un seul. Quiconque décide de recharger pose ce flag ; l'autre
+ * mécanisme, s'il se déclenche juste après (dans le MÊME chargement de page), le trouve déjà
+ * posé et renonce à recharger une seconde fois.
+ */
+export function consumeJustUpdatedFlag(): boolean {
+  const wasSet = sessionStorage.getItem(JUST_UPDATED_KEY) === '1'
+  if (wasSet) sessionStorage.removeItem(JUST_UPDATED_KEY)
+  return wasSet
+}
+
+export function markJustUpdated(): void {
+  sessionStorage.setItem(JUST_UPDATED_KEY, '1')
+}
+
+/**
+ * Second verrou, distinct du précédent : quand checkForNewVersion() nettoie tout et recharge,
+ * la page rechargée démarre SANS service worker — enregistrer un nouveau (main.tsx) va donc
+ * légitimement déclencher SON PROPRE 'controllerchange' (aucun contrôleur → un contrôleur),
+ * sur CE prochain chargement, pas celui-ci. consumeJustUpdatedFlag() aura déjà été consommé
+ * par checkForNewVersion() elle-même sur ce chargement suivant (pour ne pas relancer tout son
+ * cycle de vérification) — sans un verrou séparé qui survit jusqu'à ce 'controllerchange'
+ * précis, celui-ci le trouve absent et recharge une troisième fois inutilement.
+ */
+export function consumeControllerchangeSuppression(): boolean {
+  const wasSet = sessionStorage.getItem(SUPPRESS_CONTROLLERCHANGE_KEY) === '1'
+  if (wasSet) sessionStorage.removeItem(SUPPRESS_CONTROLLERCHANGE_KEY)
+  return wasSet
+}
+
+export function suppressNextControllerchangeReload(): void {
+  sessionStorage.setItem(SUPPRESS_CONTROLLERCHANGE_KEY, '1')
 }
 
 /**
@@ -22,12 +62,10 @@ interface VersionPayload {
  * doit jamais attendre ni dépendre de cette vérification.
  */
 export async function checkForNewVersion(): Promise<void> {
-  // On vient de recharger suite à une MAJ détectée : la version stockée est déjà à jour,
-  // pas la peine de refaire un cycle complet immédiatement (protection anti-boucle).
-  if (sessionStorage.getItem(JUST_UPDATED_KEY)) {
-    sessionStorage.removeItem(JUST_UPDATED_KEY)
-    return
-  }
+  // On vient de recharger (ce mécanisme OU celui du service worker, voir plus haut) : la
+  // version stockée est déjà à jour, pas la peine de refaire un cycle complet immédiatement
+  // (protection anti-boucle).
+  if (consumeJustUpdatedFlag()) return
 
   try {
     const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
@@ -43,10 +81,18 @@ export async function checkForNewVersion(): Promise<void> {
     }
     if (stored === payload.version) return
 
-    // Nouvelle version détectée. On pose le flag et on met à jour le stockage AVANT de
+    // Deuxième vérification du flag, ICI et pas seulement en haut de la fonction : entre le
+    // check du tout début et ce point, on vient d'attendre deux appels réseau (fetch + json).
+    // Le handler 'controllerchange' de main.tsx, lui, est synchrone — il a pu détecter la
+    // même mise à jour et déjà recharger PENDANT cette attente. Sans cette seconde
+    // vérification juste avant d'agir, les deux mécanismes rechargent chacun de leur côté.
+    if (consumeJustUpdatedFlag()) return
+
+    // Nouvelle version détectée. On pose les flags et on met à jour le stockage AVANT de
     // toucher aux service workers/caches : même si le reload échouait, le prochain
     // lancement ne redéclenchera pas indéfiniment le même nettoyage.
-    sessionStorage.setItem(JUST_UPDATED_KEY, '1')
+    markJustUpdated()
+    suppressNextControllerchangeReload()
     localStorage.setItem(VERSION_KEY, payload.version)
 
     if ('serviceWorker' in navigator) {

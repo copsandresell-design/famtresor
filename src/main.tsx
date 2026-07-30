@@ -7,7 +7,12 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import { setNeedRefresh } from './lib/pwaUpdate'
-import { checkForNewVersion } from './lib/versionCheck'
+import {
+  checkForNewVersion,
+  consumeControllerchangeSuppression,
+  consumeJustUpdatedFlag,
+  markJustUpdated,
+} from './lib/versionCheck'
 
 // PWA : sans ça, une app installée sur mobile peut rester bloquée indéfiniment sur une
 // vieille version tant qu'on ne la désinstalle pas — le navigateur ne revérifie les mises
@@ -18,8 +23,14 @@ import { checkForNewVersion } from './lib/versionCheck'
 if ('serviceWorker' in navigator) {
   let reloading = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return
+    // consumeJustUpdatedFlag()/consumeControllerchangeSuppression() : voir lib/versionCheck.ts
+    // — checkForNewVersion() détecte la même mise à jour indépendamment (comparaison de
+    // version.json) et peut avoir déjà déclenché son propre reload ; sans ce partage, les
+    // deux mécanismes rechargent chacun de leur côté et s'enchaînent en cascade (jusqu'à 3
+    // reloads observés en reproduisant le bug).
+    if (reloading || consumeJustUpdatedFlag() || consumeControllerchangeSuppression()) return
     reloading = true
+    markJustUpdated()
     window.location.reload()
   })
 
