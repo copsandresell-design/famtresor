@@ -7,6 +7,7 @@ import { addPhoto, deletePhoto, removeRemoteProfilePhoto } from '../../lib/photo
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
+import { useActiveThemePack } from '../../store/themePacksStore'
 import { useStore } from '../../store/useStore'
 import type { User } from '../../types'
 import { Button } from './Button'
@@ -28,6 +29,10 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
   const showUpsell = usePremiumUpsellStore((s) => s.show)
   // GODCLAUDE phase 3 : avatars emoji par défaut toujours gratuits, photo perso premium.
   const canUsePhoto = demoActive || computeAccess(isFounder, plan, 'custom_avatar_photos')
+  // GODCLAUDE phase 5 : emojis du pack cosmétique actif de la famille (repli sur la liste
+  // historique en mode démo ou tant que le catalogue n'est pas encore chargé).
+  const activePack = useActiveThemePack()
+  const emojiChoices = demoActive || !activePack ? AVATAR_EMOJIS : activePack.emojis
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<{ file: File; url: string } | null>(null)
@@ -168,7 +173,7 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
               ou choisis un emoji
             </div>
             <div className="flex flex-wrap justify-center gap-1.5">
-              {AVATAR_EMOJIS.map((emoji) => (
+              {emojiChoices.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"

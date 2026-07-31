@@ -21,6 +21,7 @@ import { MAX_FREE_CHILDREN } from '../../lib/access'
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
+import { useActiveThemePack } from '../../store/themePacksStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { Role, User } from '../../types'
 
@@ -30,6 +31,11 @@ function CreateProfileModal({ onClose }: { onClose: () => void }) {
   const user = useCurrentUser()
   const createUser = useStore((s) => s.createUser)
   const toast = useStore((s) => s.toast)
+  const demoActive = useDemoMode((s) => s.active)
+  // GODCLAUDE phase 5 : emojis/palette du pack cosmétique actif de la famille.
+  const activePack = useActiveThemePack()
+  const emojiChoices = demoActive || !activePack ? AVATAR_EMOJIS : activePack.emojis
+  const colorChoices = demoActive || !activePack ? COLOR_PRESETS : activePack.palette
 
   const [role, setRole] = useState<Role>('child')
   const [name, setName] = useState('')
@@ -67,7 +73,7 @@ function CreateProfileModal({ onClose }: { onClose: () => void }) {
         </Field>
         <Field label="Avatar">
           <div className="flex flex-wrap gap-1.5">
-            {AVATAR_EMOJIS.map((e) => (
+            {emojiChoices.map((e) => (
               <button
                 key={e}
                 type="button"
@@ -85,7 +91,7 @@ function CreateProfileModal({ onClose }: { onClose: () => void }) {
         </Field>
         <Field label="Couleur">
           <div className="flex gap-2">
-            {COLOR_PRESETS.map((preset) => (
+            {colorChoices.map((preset) => (
               <button
                 key={preset}
                 type="button"
@@ -124,6 +130,9 @@ function EditChildModal({ child, onClose }: { child: User; onClose: () => void }
   const updateChild = useStore((s) => s.updateChild)
   const changeSecret = useStore((s) => s.changeSecret)
   const toast = useStore((s) => s.toast)
+  const demoActive = useDemoMode((s) => s.active)
+  const activePack = useActiveThemePack()
+  const colorChoices = demoActive || !activePack ? COLOR_PRESETS : activePack.palette
   // Référence toujours à jour (l'avatar/photo peut changer via le modal imbriqué ci-dessous).
   const liveChild = useStore((s) => s.users.find((u) => u.id === child.id)) ?? child
 
@@ -159,7 +168,7 @@ function EditChildModal({ child, onClose }: { child: User; onClose: () => void }
         </Field>
         <Field label="Couleur">
           <div className="flex gap-2">
-            {COLOR_PRESETS.map((preset) => (
+            {colorChoices.map((preset) => (
               <button
                 key={preset}
                 type="button"

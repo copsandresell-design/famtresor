@@ -30,6 +30,25 @@ export async function startCheckout(interval: 'monthly' | 'annual'): Promise<str
   }
 }
 
+/** Redirige vers Stripe Checkout pour acheter un pack cosmétique à l'unité (phase 5). */
+export async function startPackCheckout(packId: string): Promise<string | null> {
+  const headers = await authHeader()
+  if (!headers.Authorization) return 'Vous devez être connecté.'
+  try {
+    const res = await fetch('/api/create-pack-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ packId }),
+    })
+    const json = await res.json()
+    if (!res.ok || !json.url) return json.error || 'Impossible de démarrer le paiement.'
+    window.location.href = json.url
+    return null
+  } catch {
+    return 'Impossible de contacter le serveur de paiement.'
+  }
+}
+
 /** Redirige vers le portail de facturation Stripe (gérer/annuler l'abonnement). */
 export async function openBillingPortal(): Promise<string | null> {
   const headers = await authHeader()

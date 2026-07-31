@@ -66,12 +66,27 @@ export default async function handler(req: any, res: any) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        if (session.mode !== 'subscription') break
         const familyId = session.client_reference_id || (session.metadata?.family_id as string | undefined)
         if (!familyId) {
           console.error('stripe-webhook: checkout.session.completed sans family_id')
           break
         }
+
+        if (session.mode === 'payment') {
+          // Achat à l'unité d'un pack cosmétique (voir api/create-pack-checkout-session.ts) —
+          // phase 5.
+          const packId = session.metadata?.pack_id as string | undefined
+          if (!packId) {
+            console.error('stripe-webhook: checkout.session.completed (payment) sans pack_id')
+            break
+          }
+          await supabase
+            .from('family_theme_packs')
+            .upsert({ family_id: familyId, pack_id: packId }, { onConflict: 'family_id,pack_id' })
+          break
+        }
+
+        if (session.mode !== 'subscription') break
         const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
         const subscriptionId =
           typeof session.subscription === 'string' ? session.subscription : session.subscription?.id

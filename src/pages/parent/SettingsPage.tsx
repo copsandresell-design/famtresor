@@ -2,6 +2,7 @@ import { ChevronRight, Medal, Sparkles, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { OnboardingTour } from '../../components/OnboardingTour'
+import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Field, inputCls } from '../../components/ui/Field'
@@ -11,11 +12,13 @@ import { Switch } from '../../components/ui/Switch'
 import { cn } from '../../lib/cn'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
 import { computeAccess } from '../../lib/access'
-import { openBillingPortal } from '../../lib/billing'
+import { openBillingPortal, startPackCheckout } from '../../lib/billing'
 import { signOutFamily } from '../../lib/familyAuth'
+import { isPackUnlocked, setActiveThemePack } from '../../lib/themePacks'
 import { useDemoMode } from '../../store/demoStore'
 import { refreshFamilyMembership, useFamilyAuthStore } from '../../store/familyAuthStore'
 import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
+import { refreshThemePacks, useThemePacksStore } from '../../store/themePacksStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { FeatureFlags, Theme } from '../../types'
 
@@ -220,8 +223,13 @@ export function SettingsPage() {
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
   const showUpsell = usePremiumUpsellStore((s) => s.show)
+  const familyId = useFamilyAuthStore((s) => s.familyId)
+  const themePacks = useThemePacksStore((s) => s.packs)
+  const ownedPackIds = useThemePacksStore((s) => s.ownedPackIds)
+  const activePackId = useThemePacksStore((s) => s.activePackId)
   // Mode démo : jamais limité (voir components/ui/PremiumGate.tsx).
   const canUseAutomaticPenalties = demoActive || computeAccess(isFounder, plan, 'automatic_penalties')
+  const [packBusy, setPackBusy] = useState<string | null>(null)
 
   const [familyName, setFamilyName] = useState(settings.familyName)
   const [bonus, setBonus] = useState(String(settings.initiativeBonus))
@@ -236,7 +244,16 @@ export function SettingsPage() {
   const [weeklyCapAmount, setWeeklyCapAmount] = useState(String(settings.weeklyPointsCap.amount))
   const [reminderHour, setReminderHour] = useState(String(settings.dailyReminder.hour))
   const [showTutorial, setShowTutorial] = useState(false)
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [, setSearchParams] = useSearchParams()
+  // Capturé UNE FOIS (lazy initializer) plutôt que relu à chaque effet : appeler
+  // setSearchParams() plus bas modifie window.location, donc relire window.location.search
+  // directement dans l'effet donnerait un résultat différent selon qu'on est à la 1ʳᵉ ou à
+  // une éventuelle réinvocation (StrictMode, dev uniquement, double-invoque les effects) —
+  // la 2ᵉ invocation verrait alors l'URL déjà nettoyée par la 1ʳᵉ et n'annulerait à tort
+  // aucun intervalle. Un booléen stable capturé une fois n'a pas ce problème (bug réel
+  // observé en testant le retour de paiement en conditions réelles, voir session).
+  const [premiumJustPaid] = useState(() => new URLSearchParams(window.location.search).get('premium') === 'success')
+  const [packJustPaid] = useState(() => new URLSearchParams(window.location.search).get('pack') === 'success')
 
   // Retour de Stripe Checkout (voir api/create-checkout-session.ts success_url) : le webhook
   // Stripe (api/stripe-webhook.ts) est ce qui fait réellement foi pour passer plan à
@@ -244,7 +261,7 @@ export function SettingsPage() {
   // moment où l'utilisateur revient ici. On relit quelques fois avec un court délai plutôt
   // qu'une seule fois immédiatement.
   useEffect(() => {
-    if (searchParams.get('premium') !== 'success') return
+    if (!premiumJustPaid) return
     setSearchParams({}, { replace: true })
     let attempts = 0
     const interval = setInterval(async () => {
@@ -253,9 +270,41 @@ export function SettingsPage() {
       if (useFamilyAuthStore.getState().plan === 'premium' || attempts >= 5) clearInterval(interval)
     }, 1500)
     return () => clearInterval(interval)
-  }, [searchParams, setSearchParams])
+  }, [premiumJustPaid, setSearchParams])
+
+  // Retour de Stripe Checkout après achat d'un pack cosmétique (voir
+  // api/create-pack-checkout-session.ts success_url) — même raisonnement que ci-dessus.
+  useEffect(() => {
+    if (!packJustPaid || !familyId) return
+    setSearchParams({}, { replace: true })
+    let attempts = 0
+    const before = useThemePacksStore.getState().ownedPackIds.size
+    const interval = setInterval(async () => {
+      attempts += 1
+      await refreshThemePacks(familyId)
+      if (useThemePacksStore.getState().ownedPackIds.size > before || attempts >= 5) clearInterval(interval)
+    }, 1500)
+    return () => clearInterval(interval)
+  }, [packJustPaid, familyId, setSearchParams])
 
   if (!user) return null
+
+  async function choosePack(packId: string) {
+    setPackBusy(packId)
+    const err = await setActiveThemePack(packId)
+    if (err) toast(err, 'error')
+    else if (familyId) await refreshThemePacks(familyId)
+    setPackBusy(null)
+  }
+
+  async function buyPack(packId: string) {
+    setPackBusy(packId)
+    const err = await startPackCheckout(packId)
+    if (err) {
+      toast(err, 'error')
+      setPackBusy(null)
+    }
+  }
 
   function saveRules() {
     updateSettings(
@@ -740,6 +789,55 @@ export function SettingsPage() {
             </div>
           </>
         )}
+      </Card>
+
+      <Card className="space-y-3 p-5">
+        <h2 className="font-bold">Apparence</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Choisit les emojis et couleurs proposés pour les avatars des profils de la famille.
+          {!isFounder && plan !== 'premium' && ' Premium débloque tous les packs.'}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {themePacks.map((pack) => {
+            const unlocked = demoActive || isPackUnlocked(pack, isFounder, plan, ownedPackIds)
+            const active = pack.id === activePackId
+            const busy = packBusy === pack.id
+            return (
+              <div
+                key={pack.id}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl border p-3',
+                  active ? 'border-brand-from' : 'border-slate-200 dark:border-slate-700',
+                )}
+              >
+                <span className="text-2xl" aria-hidden>
+                  {pack.emojis.slice(0, 3).join(' ')}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{pack.name}</p>
+                  <div className="mt-1 flex gap-1">
+                    {pack.palette.slice(0, 5).map((c) => (
+                      <span key={c} className="h-3 w-3 rounded-full" style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                </div>
+                {active ? (
+                  <Badge>Actif</Badge>
+                ) : unlocked ? (
+                  <Button size="sm" variant="soft" disabled={busy} onClick={() => void choosePack(pack.id)}>
+                    Choisir
+                  </Button>
+                ) : pack.purchasable ? (
+                  <Button size="sm" disabled={busy} onClick={() => void buyPack(pack.id)}>
+                    Acheter
+                  </Button>
+                ) : (
+                  <span className="text-xs text-slate-400">Bientôt</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </Card>
 
       <Card className="space-y-3 p-5">

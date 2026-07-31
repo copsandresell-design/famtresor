@@ -1,8 +1,9 @@
 # GODCLAUDE — Transformation multi-familles + freemium
 
-Point d'avancement : **Phases 1, 2, 3 et 4 terminées et vérifiées (dans la limite de ce qui
-est testable sans compte Stripe réel — voir section Phase 4). Phase 5 (packs cosmétiques)
-NON commencée.**
+Point d'avancement : **Les 5 phases sont terminées et vérifiées** (dans la limite de ce qui
+est testable sans compte Stripe réel — voir sections Phase 4 et Phase 5). GODCLAUDE est donc
+entièrement implémenté à ce stade ; ce qui reste est décrit en bas de ce document
+("Ce qui reste").
 
 Conformément à la consigne reçue ("avance autant de phases que possible, arrête-toi après
 la phase la plus avancée correctement terminée et vérifiée, documente où et pourquoi"), ce
@@ -307,6 +308,72 @@ ne fait AUCUN appel réseau à Stripe) : entièrement testable sans compte Strip
   test Stripe `4242 4242 4242 4242`, n'importe quelle date future / CVC) pour confirmer le
   chemin complet — voir "Déploiement" ci-dessous pour la configuration préalable requise.
 
+## Ce qui a été fait — Phase 5 (packs cosmétiques)
+
+- `supabase/migrations/20260731030000_phase5_theme_packs.sql` : `theme_packs` (catalogue
+  public — emojis + palette de couleurs par pack, `stripe_price_id` NULL tant qu'un prix
+  Stripe réel n'a pas été créé et renseigné), `family_theme_packs` (packs achetés à l'unité
+  par une famille), `families.active_theme_pack_id`. **Entièrement piloté par données** :
+  ajouter un 6ᵉ pack ne demande aucun redéploiement, juste une ligne SQL. 5 packs seedés :
+  Espace (gratuit/par défaut — mêmes emojis que la liste historique, pour ne pas invalider
+  les avatars déjà choisis), Dinosaures, Pirates, Fées & licornes, Robots (payants, prix à
+  renseigner par Julien).
+- `has_theme_pack(family_id, pack_id)` : même schéma que `has_family_access()` — fondatrice
+  ou premium = tous les packs inclus (vendus "à l'unité OU avec le premium", comme demandé),
+  pack par défaut toujours débloqué, sinon vérifie un achat réel dans `family_theme_packs`.
+- `set_active_theme_pack(pack_id)` (RPC) : change le pack actif d'une famille — vérifie
+  lui-même l'accès via `has_theme_pack()`, ne fait jamais confiance au client.
+- `api/create-pack-checkout-session.ts` : session Stripe Checkout en **paiement unique**
+  (`mode: 'payment'`, pas un abonnement) pour un pack donné — le prix vient de
+  `theme_packs.stripe_price_id` en base, pas d'un env var (cohérent avec "config
+  extensible"). `api/stripe-webhook.ts` étendu : le même événement
+  `checkout.session.completed` gère maintenant à la fois les abonnements Premium (phase 4,
+  `mode: 'subscription'`) ET les achats de pack (`mode: 'payment'`) selon le mode de la
+  session ; l'unlock est un upsert (rejouer le même événement webhook deux fois, ce que
+  Stripe peut faire, ne duplique rien).
+- Frontend : `src/lib/themePacks.ts` (catalogue, packs possédés, `isPackUnlocked()` — miroir
+  synchrone de `has_theme_pack()`), `src/store/themePacksStore.ts` (chargé une fois la
+  famille connue, voir `App.tsx`), nouvelle carte "Apparence" dans `SettingsPage.tsx`
+  (liste des 5 packs, achat/sélection). `AvatarEditorModal.tsx` et les pickers
+  d'avatar/couleur de `ChildrenPage.tsx` (création ET édition de profil) utilisent
+  maintenant les emojis/couleurs du pack ACTIF de la famille plutôt que la liste fixe
+  `AVATAR_EMOJIS`/`COLOR_PRESETS` (conservées comme repli en mode démo ou tant que le
+  catalogue n'est pas encore chargé).
+
+### Bug réel trouvé et corrigé en testant ce dernier maillon
+
+En vérifiant en navigateur réel le retour de paiement (`?pack=success`), la sélection d'un
+pack n'apparaissait jamais après l'"achat" simulé, alors même que la ligne existait bien en
+base. Cause : l'effet de relecture (`useEffect`) relisait `window.location.search` à chaque
+exécution pour décider s'il devait démarrer sa boucle de sondage — mais cet effet appelle
+lui-même `setSearchParams()` pour nettoyer l'URL, ce qui modifie `window.location` ET
+redéclenche l'effet (React StrictMode, actif en dev, réinvoque systématiquement les effects
+une seconde fois) : la seconde invocation relisait alors une URL déjà nettoyée par la
+première, et n'ouvrait donc jamais de boucle de sondage. Corrigé en capturant l'intention
+("l'URL contenait-elle `?pack=success` ?") **une seule fois**, via un `useState` à
+initialisation paresseuse, stable quel que soit le nombre de fois où l'effet est réinvoqué —
+plutôt que de relire une valeur que l'effet modifie lui-même. Le même correctif a été
+appliqué à l'effet équivalent de la phase 4 (`?premium=success`), qui avait exactement le
+même défaut mais n'avait encore jamais été testé jusqu'au bout (seule la requête réseau
+avait été vérifiée en phase 4, pas le retour complet). Revérifié après correction : 10/10
+assertions passent, y compris le cycle complet achat → webhook simulé → affichage → sélection.
+
+### Découverte annexe, hors périmètre (non corrigée)
+
+En testant une famille toute neuve, la console affiche des échecs de synchronisation pour
+`sync_badge_defs`/`sync_streak_defs`/`sync_rank_defs`/`sync_settings` ("invalid input syntax
+for type uuid") : les identifiants par défaut de ces catalogues (`'debutant'`, `'main'`,
+etc., dans `src/lib/ranks.ts`/`ts` associés) sont des chaînes lisibles, pas des UUID, alors
+que ces colonnes sont typées `UUID` dans les migrations. Ce problème **préexiste à
+GODCLAUDE** (présent dans `20260729020000_gamification_defs.sql`, jamais touché par ce
+travail) et affecterait vraisemblablement aussi la famille de Julien en production de la
+même façon pour ces catalogues précis (à vérifier — possible que ces tables aient été
+créées avec un type différent directement en base, comme pour d'autres écarts déjà
+documentés plus haut). Sans rapport avec l'isolation/la sécurité multi-familles ni avec les
+phases 1-5 : signalé ici pour visibilité, pas corrigé (nécessiterait de choisir entre
+changer le type de colonne ou régénérer ces identifiants, une décision produit qui dépasse
+le périmètre de cette session).
+
 ## tsc / tests / build
 
 `npx tsc -b`, `npm test -- --run` (63 tests, tous passants) et `npm run build` : tous verts
@@ -331,6 +398,7 @@ déploiement sans supervision directe). Séquence à suivre, dans cet ordre exac
    - `supabase/migrations/20260731000000_phase3_freemium_plan.sql`
    - `supabase/migrations/20260731010000_phase3_adjust_free_split.sql`
    - `supabase/migrations/20260731020000_phase4_stripe_billing.sql`
+   - `supabase/migrations/20260731030000_phase5_theme_packs.sql`
 2. **Immédiatement après**, récupérer les codes de rattachement de la famille fondatrice :
    ```sql
    SELECT label, code FROM family_claim_codes
@@ -353,6 +421,15 @@ déploiement sans supervision directe). Séquence à suivre, dans cet ordre exac
    - Sur Vercel (Project Settings → Environment Variables), ajouter : `STRIPE_SECRET_KEY`
      (`sk_test_...`), `STRIPE_WEBHOOK_SECRET` (`whsec_...`), `STRIPE_PRICE_MONTHLY`
      (`price_...`), `STRIPE_PRICE_ANNUAL` (`price_...`).
+   - **Packs cosmétiques (phase 5, optionnel — les packs restent affichés "Bientôt" tant que
+     ceci n'est pas fait, rien ne casse)** : pour chaque pack payant à mettre en vente, créer
+     un Produit + Prix (paiement unique, pas récurrent) dans Stripe test mode, puis :
+     ```sql
+     UPDATE theme_packs SET stripe_price_id = 'price_...' WHERE id = 'dinosaures';
+     -- idem pour 'pirates', 'fees-licornes', 'robots'
+     ```
+     Le même endpoint webhook (étape précédente) gère aussi ces achats — rien à ajouter côté
+     configuration webhook.
 4. **Déployer le frontend** (`git push` sur `main`, déploiement Vercel automatique).
 5. **Immédiatement après le déploiement**, sur kids-up.vercel.app : créer un compte
    (email + mot de passe, différent du PIN existant), choisir "J'ai un code", coller un des
@@ -371,14 +448,22 @@ Tant que l'étape 5 n'est pas faite, personne dans la famille ne peut utiliser l
 bloquante pour la famille de Julien (qui n'en a pas besoin) mais doit être faite avant
 d'annoncer Premium à de vraies familles.
 
-## Ce qui reste — Phase 5 (non commencée)
+## Ce qui reste
 
-- **Phase 5** : packs cosmétiques (Dinosaures, Pirates, Fées & licornes, Robots), config
-  extensible, vente à l'unité ou avec le premium via Stripe test mode — passera par
-  `has_family_access()` (déjà prêt, phase 2/3/4) avec de nouvelles clés `FeatureKey`, et
-  réutilisera le flux de paiement Stripe déjà en place (phase 4) plutôt que d'en refaire un.
+Les 5 phases de GODCLAUDE sont maintenant implémentées et vérifiées (dans la limite de ce
+qui est testable sans compte Stripe réel). Il ne reste que des actions manuelles, pas de
+code :
 
-Aucun code n'a été écrit pour cette phase à ce stade. Les phases 3/4 ont fait des choix
-produit sans validation explicite de l'utilisateur (voir section dédiée en haut de ce
-document) — à relire avant de passer à la phase 5, certains verrous ou le modèle de pricing
-pourraient devoir être ajustés.
+- Exécuter les migrations en attente et configurer Stripe (voir "Déploiement" ci-dessus).
+- Créer les Prix Stripe pour les packs cosmétiques et renseigner `stripe_price_id` (optionnel,
+  n'importe quel moment après le déploiement — les packs sans prix restent affichés
+  "Bientôt" sans rien casser).
+- Faire le test réel de paiement (Premium et, si des prix de pack sont configurés, un achat
+  de pack) une fois Stripe configuré — la seule vérification que je n'ai pas pu faire
+  moi-même faute d'accès à un compte Stripe.
+- Décider si les choix produit faits sans validation explicite de l'utilisateur (voir section
+  dédiée en haut de ce document — quels verrous exacts, `MAX_FREE_CUSTOM`, prix non affichés
+  dans l'app, etc.) conviennent tels quels ou doivent être ajustés.
+- La question annexe hors périmètre découverte en phase 5 (identifiants non-UUID pour les
+  catalogues de badges/séries/rangs/réglages par défaut — voir section Phase 5) mériterait
+  d'être creusée séparément, sans urgence.

@@ -31,6 +31,7 @@ import { TasksPage } from './pages/parent/TasksPage'
 import { PremiumGate } from './components/ui/PremiumGate'
 import { useDemoMode } from './store/demoStore'
 import { useFamilyAuthStore } from './store/familyAuthStore'
+import { refreshThemePacks } from './store/themePacksStore'
 import { useStore } from './store/useStore'
 
 // Recharts ne sert qu'ici : chargÃ© Ã  la demande pour allÃ©ger le bundle initial.
@@ -71,6 +72,7 @@ export default function App() {
   const shopEnabled = useStore((s) => s.settings.features.shop)
   const demoActive = useDemoMode((s) => s.active)
   const familyAuthStatus = useFamilyAuthStore((s) => s.status)
+  const familyId = useFamilyAuthStore((s) => s.familyId)
   useTheme()
   useSessionExpiry()
   useNotificationRealtime()
@@ -86,6 +88,12 @@ export default function App() {
   useEffect(() => {
     if (shouldInitRealStore) void init()
   }, [init, shouldInitRealStore])
+
+  // GODCLAUDE phase 5 : catalogue de packs cosmétiques + ceux possédés par la famille — pas
+  // en mode démo (démo = emojis/couleurs par défaut codés en dur, jamais de vraie famille).
+  useEffect(() => {
+    if (familyAuthStatus === 'ready' && familyId) void refreshThemePacks(familyId)
+  }, [familyAuthStatus, familyId])
 
   // Statut Supabase Auth encore inconnu (restauration de session en cours) : on attend avant de
   // décider quoi afficher, sauf en mode démo qui ne dépend jamais de Supabase.
