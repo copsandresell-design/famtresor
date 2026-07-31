@@ -17,6 +17,9 @@ import { AVATAR_EMOJIS } from '../../lib/categories'
 import { computeBalance } from '../../lib/balance'
 import { computeLifetimePoints, computePoints } from '../../lib/points'
 import { computeRank } from '../../lib/ranks'
+import { MAX_FREE_CHILDREN } from '../../lib/access'
+import { useDemoMode } from '../../store/demoStore'
+import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { Role, User } from '../../types'
 
@@ -205,6 +208,9 @@ export function ChildrenPage() {
   const updateChild = useStore((s) => s.updateChild)
   const resetBalance = useStore((s) => s.resetBalance)
   const toast = useStore((s) => s.toast)
+  const demoActive = useDemoMode((s) => s.active)
+  const isFounder = useFamilyAuthStore((s) => s.isFounder)
+  const plan = useFamilyAuthStore((s) => s.plan)
 
   const [editing, setEditing] = useState<User | null>(null)
   const [resetting, setResetting] = useState<User | null>(null)
@@ -213,16 +219,36 @@ export function ChildrenPage() {
   if (!user) return null
 
   const children = users.filter((u) => u.role === 'child')
+  // GODCLAUDE phase 3 : limite gratuite — pas un FeatureKey booléen (voir lib/access.ts),
+  // vérifiée directement ici avec le nombre réel de profils enfant (actifs ou non, pour
+  // qu'on ne puisse pas contourner la limite en désactivant un profil). Mode démo : jamais
+  // limité (useFamilyAuthStore n'est pas démo-consciente, voir components/ui/PremiumGate.tsx).
+  const atFreeLimit = !demoActive && !isFounder && plan !== 'premium' && children.length >= MAX_FREE_CHILDREN
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-black">Enfants</h1>
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={() => (atFreeLimit ? toast(`Passez à Premium pour dépasser ${MAX_FREE_CHILDREN} enfants.`, 'error') : setCreating(true))}>
           <Plus size={18} />
           Nouveau profil
         </Button>
       </div>
+
+      {atFreeLimit && (
+        <Card className="flex flex-col items-center gap-2 p-5 text-center">
+          <span className="text-2xl" aria-hidden>
+            ✨
+          </span>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            La formule gratuite est limitée à {MAX_FREE_CHILDREN} enfants. Passez à Premium pour en ajouter
+            davantage.
+          </p>
+          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+            Découvrir Premium
+          </Button>
+        </Card>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         {children.map((child) => {

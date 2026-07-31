@@ -8,6 +8,9 @@ import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
 import { AVATAR_EMOJIS } from '../../lib/categories'
+import { canCreateCustom, MAX_FREE_CUSTOM } from '../../lib/access'
+import { useDemoMode } from '../../store/demoStore'
+import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { RankDef } from '../../types'
 
@@ -101,6 +104,9 @@ export function RankDefsPage() {
   const rankDefs = useStore((s) => s.rankDefs)
   const deleteRankDef = useStore((s) => s.deleteRankDef)
   const toast = useStore((s) => s.toast)
+  const demoActive = useDemoMode((s) => s.active)
+  const isFounder = useFamilyAuthStore((s) => s.isFounder)
+  const plan = useFamilyAuthStore((s) => s.plan)
 
   const [editing, setEditing] = useState<RankDef | 'new' | null>(null)
   const [deleting, setDeleting] = useState<RankDef | null>(null)
@@ -108,6 +114,20 @@ export function RankDefsPage() {
   if (!user) return null
 
   const sorted = [...rankDefs].sort((a, b) => a.threshold - b.threshold)
+
+  // Voir BadgeDefsPage.tsx / lib/access.ts pour le raisonnement complet (ajustement du 31/07).
+  const customCount = rankDefs.filter((d) => d.createdBy !== 'system').length
+  const canCreateOrEditCustom = demoActive || canCreateCustom(isFounder, plan, customCount)
+
+  function requestNew() {
+    if (canCreateOrEditCustom) setEditing('new')
+    else toast(`Passez à Premium pour créer plus de ${MAX_FREE_CUSTOM} rang personnalisé.`, 'error')
+  }
+
+  function requestEdit(def: RankDef) {
+    if (def.createdBy !== 'system' || canCreateOrEditCustom) setEditing(def)
+    else toast('Passez à Premium pour modifier les rangs du catalogue par défaut.', 'error')
+  }
 
   return (
     <div className="space-y-5">
@@ -118,11 +138,26 @@ export function RankDefsPage() {
             Progression basée sur les points gagnés à vie — jamais dégressive.
           </p>
         </div>
-        <Button onClick={() => setEditing('new')}>
+        <Button onClick={requestNew}>
           <Plus size={18} />
           Nouveau rang
         </Button>
       </div>
+
+      {!canCreateOrEditCustom && (
+        <Card className="flex flex-col items-center gap-2 p-5 text-center">
+          <span className="text-2xl" aria-hidden>
+            ✨
+          </span>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            La formule gratuite inclut {MAX_FREE_CUSTOM} rang personnalisé. Passez à Premium pour créer ou modifier
+            les rangs du catalogue.
+          </p>
+          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+            Découvrir Premium
+          </Button>
+        </Card>
+      )}
 
       <div className="space-y-3">
         {sorted.map((def) => (
@@ -140,7 +175,7 @@ export function RankDefsPage() {
               <p className="text-xs text-slate-500 dark:text-slate-400">à partir de {def.threshold} pts à vie</p>
             </div>
             <button
-              onClick={() => setEditing(def)}
+              onClick={() => requestEdit(def)}
               aria-label="Modifier le rang"
               className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             >

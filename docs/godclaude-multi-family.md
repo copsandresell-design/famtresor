@@ -1,7 +1,7 @@
 # GODCLAUDE — Transformation multi-familles + freemium
 
-Point d'avancement : **Phase 1 terminée et vérifiée. Phase 2 (scaffold minimal) terminée.
-Phases 3 (limites freemium), 4 (Stripe) et 5 (packs cosmétiques) NON commencées.**
+Point d'avancement : **Phases 1, 2 et 3 terminées et vérifiées. Phases 4 (Stripe) et 5
+(packs cosmétiques) NON commencées.**
 
 Conformément à la consigne reçue ("avance autant de phases que possible, arrête-toi après
 la phase la plus avancée correctement terminée et vérifiée, documente où et pourquoi"), ce
@@ -9,15 +9,33 @@ document explique précisément l'état des lieux, ce qui a été vérifié et c
 reste à faire — y compris les **actions manuelles obligatoires côté Julien avant tout
 déploiement** (section "Déploiement" ci-dessous, à lire en premier).
 
+## Choix produit faits sans validation explicite (question posée, refusée par l'utilisateur)
+
+Avant d'implémenter la phase 3, une question de clarification a été posée sur trois points
+(quels verrous exacts pour "catalogues standards", quelles fonctionnalités comptent comme
+"avancées", comment activer premium sans Stripe) — refusée par l'utilisateur ("reprend").
+Les choix suivants ont donc été faits de façon autonome et sont **à valider/ajuster** :
+
+- Catalogue **tâches** : reste librement personnalisable en gratuit (cœur de l'usage
+  quotidien). Catalogue **boutique** : le catalogue de départ (12 lots) reste
+  utilisable/assignable gratuitement, mais créer ou modifier un lot personnalisé est premium.
+- Fonctionnalités passées premium : Stats & Calendrier, pénalités automatiques (inactivité +
+  récurrentes), personnalisation des séries/badges/rangs (les catalogues par défaut restent
+  utilisables gratuitement, juste pas éditables), propositions de tâches par les enfants.
+- Activation premium en attendant Stripe (phase 4) : colonne `families.plan` modifiable à la
+  main en SQL (`UPDATE families SET plan = 'premium' WHERE id = '<family_id>'`) — pas
+  d'écran admin dédié pour l'instant.
+
 ## Pourquoi s'arrêter ici
 
 Les phases 1 et 2 touchent à l'authentification et à l'isolation des données entre
 familles : c'est la partie la plus sensible de tout GODCLAUDE (une erreur ici = fuite de
 données entre familles, ou la famille de Julien bloquée hors de sa propre app). Les avoir
 faites *et vérifiées avec un vrai test d'isolation locale* avant de passer à autre chose
-était non-négociable. Les phases 3/4/5 (limites freemium, Stripe, packs cosmétiques) sont
-des couches produit au-dessus de ces fondations — moins risquées individuellement, mais
-represent encore beaucoup de travail (UI d'upsell, intégration Stripe test mode, config de
+était non-négociable. La phase 3 (limites freemium) est une couche produit au-dessus de ces
+fondations — moins risquée individuellement mais representant tout de même du travail réel
+(UI d'upsell dans 7 endroits différents, cohérence démo/gratuit/fondateur). Les phases 4/5
+(Stripe, packs cosmétiques) sont plus lourdes encore (intégration paiement réelle, config de
 packs). Les faire à la va-vite dans le temps restant aurait sacrifié la rigueur qui vient
 d'être mise dans les phases 1-2. Elles sont documentées comme travail futur, non commencé.
 
@@ -59,10 +77,69 @@ d'être mise dans les phases 1-2. Elles sont documentées comme travail futur, n
     famille fondatrice (Julien) via un code à usage unique — voir "Déploiement".
 - `supabase/migrations/20260730020000_phase2_founder_access.sql` (phase 2) :
   `has_family_access(family_id, feature)`, le verrou central unique que les phases 3/5
-  devront utiliser. Renvoie toujours `true` pour la famille fondatrice. Comme aucune limite
-  freemium ni pack cosmétique n'existe encore, elle renvoie `true` pour tout le monde pour
-  l'instant (rien à restreindre) — c'est le point d'entrée qui existe déjà, prêt à être
-  complété par ces phases futures.
+  utilisent. Renvoie toujours `true` pour la famille fondatrice.
+
+## Ce qui a été fait — Phase 3 (limites freemium)
+
+- `supabase/migrations/20260731000000_phase3_freemium_plan.sql` : ajoute `families.plan`
+  (`'free'` par défaut, `'premium'` posé automatiquement sur la famille fondatrice — en plus
+  de `is_founder`, qui reste la vraie garantie non-négociable). `has_family_access()` mise à
+  jour avec la vraie liste des fonctionnalités verrouillées en gratuit : `custom_shop_catalog`,
+  `custom_avatar_photos`, `stats_calendar`, `automatic_penalties`, `custom_gamification_defs`,
+  `task_suggestions`. Toute clé future non listée reste `true` par défaut (fail-open, pour ne
+  jamais bloquer silencieusement une fonctionnalité qu'on aurait oublié d'y ajouter).
+- `src/lib/access.ts` : `FeatureKey` (doit rester synchronisée avec la liste SQL ci-dessus —
+  commentée comme telle des deux côtés), `computeAccess()` (miroir synchrone, pour l'affichage,
+  de `has_family_access()` — évite un aller-retour réseau par rendu), `hasAccess()` (RPC,
+  faisant autorité), `MAX_FREE_CHILDREN = 2` (limite numérique, pas un `FeatureKey` booléen,
+  donc pas gérée par `has_family_access()` — vérifiée directement avec le nombre réel
+  d'enfants).
+- `src/components/ui/PremiumGate.tsx` : composant réutilisable (carte "✨ + upsell") utilisé
+  pour gater les routes Stats, Calendrier, Badges/Séries/Rangs personnalisés, et l'onglet
+  Propositions de tâches (voir `App.tsx`, `TasksPage.tsx`). Pas de vrai paiement (phase 4 non
+  commencée) : le bouton affiche juste "Le paiement Premium arrive bientôt !".
+- Gates supplémentaires, chacun avec son propre verrou inline (pas via `PremiumGate`, car
+  imbriqués dans une page existante plutôt que sur une route dédiée) :
+  - `ChildrenPage.tsx` : limite à `MAX_FREE_CHILDREN`, bandeau + bouton "Nouveau profil"
+    bloqué au-delà (comptage sur TOUS les profils enfant, actifs ou non, pour qu'on ne
+    puisse pas contourner en désactivant un profil).
+  - `ShopPage.tsx` : le catalogue de départ reste consultable/assignable gratuitement ;
+    "Nouveau lot" et "Modifier" un lot existant sont gatés.
+  - `AvatarEditorModal.tsx` : avatars emoji toujours gratuits, "Prendre une photo"/"Choisir
+    dans la galerie" gatés.
+  - `SettingsPage.tsx` : activer (pas désactiver) les pénalités récurrentes/d'inactivité est
+    gaté ; **`defaultSettings` (db/seed.ts) changé pour qu'une famille neuve démarre avec ces
+    deux réglages à `false`** (ils valaient `true`/`false` par défaut avant — une famille
+    gratuite ne doit pas démarrer avec une fonctionnalité premium déjà activée). Sans
+    incidence sur la famille de Julien (ses réglages réels existent déjà côté Supabase).
+  - `ChildHomePage.tsx` (côté ENFANT) : la section "Mes propositions" est masquée en
+    silence si la famille n'a pas Premium — **jamais de paywall montré à un enfant**,
+    exactement le même traitement que le réglage `settings.features.taskSuggestions` déjà
+    existant, juste une condition de plus.
+  - `api/check-inactivity.ts` : défense en profondeur — le cron vérifie lui-même
+    `has_family_access(familyId, 'automatic_penalties')` avant d'appliquer quoi que ce soit,
+    indépendamment de ce que dit le réglage local (utile si un réglage `true` traînait déjà,
+    ou en cas de rétrogradation future premium → gratuit).
+- **Mode démo toujours intégral** : chaque gate ci-dessus court-circuite si
+  `useDemoMode().active` est vrai, car `useFamilyAuthStore` (dont dépend `computeAccess`)
+  reflète le VRAI statut Supabase Auth de l'appareil, jamais conscient du mode démo — sans ce
+  bypass explicite, visiter `/demo` aurait montré une version "gratuite" bridée de l'app au
+  lieu de la vitrine complète attendue. Vérifié en navigateur (voir plus bas).
+
+### Vérification réelle (navigateur, stack local)
+
+Même technique que pour la phase 1 (copie jetable du repo, `src/lib/supabase.ts` repointé
+vers le stack Supabase local, jamais vers la production) :
+
+- **Famille gratuite neuve** (signup complet) : Stats, Calendrier et Badges personnalisés
+  affichent bien l'upsell ; 2 enfants se créent normalement ; le bandeau de limite apparaît
+  après le 2ᵉ ; un 3ᵉ enfant serait bloqué (bouton redirigé vers un message, pas de blocage
+  DB).
+- **Famille fondatrice** (rattachée via un profil parent de test inséré directement en local,
+  Julien/Marion réels non reproductibles localement — voir plus haut) : aucun upsell nulle
+  part, et le bandeau de limite enfants n'apparaît PAS malgré 2 enfants déjà présents
+  (Hugo/Kenzo) + le compte fondateur peut légitimement en ajouter plus.
+- 13 assertions au total, toutes passées.
 
 ### Correctifs nécessaires ailleurs (découverts pendant l'implémentation)
 - `api/check-inactivity.ts` et `api/daily-reminder.ts` (crons Vercel) utilisent la clé
@@ -178,6 +255,7 @@ déploiement sans supervision directe). Séquence à suivre, dans cet ordre exac
    - `supabase/migrations/20260728000000_baseline_core_tables.sql`
    - `supabase/migrations/20260730010000_multi_family_phase1.sql`
    - `supabase/migrations/20260730020000_phase2_founder_access.sql`
+   - `supabase/migrations/20260731000000_phase3_freemium_plan.sql`
 2. **Immédiatement après**, récupérer les codes de rattachement de la famille fondatrice :
    ```sql
    SELECT label, code FROM family_claim_codes
@@ -196,14 +274,15 @@ déploiement sans supervision directe). Séquence à suivre, dans cet ordre exac
 Tant que l'étape 4 n'est pas faite, personne dans la famille ne peut utiliser l'app déployée
 — à faire dans la foulée du déploiement, pas "plus tard dans la journée".
 
-## Ce qui reste — Phases 3, 4, 5 (non commencées)
+## Ce qui reste — Phases 4, 5 (non commencées)
 
-- **Phase 3** : limites freemium (famille gratuite = 2 enfants max, avatars par défaut
-  uniquement, catalogues standards, boutique basique ; premium = illimité). Blocage côté
-  parent avec upsell, jamais visible aux enfants. Doit passer par `has_family_access()`.
-- **Phase 4** : facturation Stripe, clés TEST uniquement, mensuel/annuel, webhook Vercel.
+- **Phase 4** : facturation Stripe, clés TEST uniquement, mensuel/annuel, webhook Vercel qui
+  passera `families.plan` à `'premium'` (colonne déjà posée en phase 3, actuellement modifiée
+  à la main en attendant).
 - **Phase 5** : packs cosmétiques (Dinosaures, Pirates, Fées & licornes, Robots), config
-  extensible, vente à l'unité ou avec le premium via Stripe test mode.
+  extensible, vente à l'unité ou avec le premium via Stripe test mode — passera par
+  `has_family_access()` (déjà prêt, phase 2/3) avec de nouvelles clés `FeatureKey`.
 
-Aucune de ces trois phases n'a de code écrit à ce stade — seul le chokepoint
-`has_family_access()` (phase 2) existe en prévision.
+Aucune de ces deux phases n'a de code écrit à ce stade. La phase 3 a volontairement fait des
+choix produit sans validation explicite (voir section dédiée en haut de ce document) — à
+relire avant de passer aux phases 4/5, certains verrous pourraient devoir être ajustés.

@@ -7,6 +7,9 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { Switch } from '../../components/ui/Switch'
+import { canCreateCustom, MAX_FREE_CUSTOM } from '../../lib/access'
+import { useDemoMode } from '../../store/demoStore'
+import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { StreakDef, StreakKind, StreakTier } from '../../types'
 
@@ -155,11 +158,28 @@ export function StreakDefsPage() {
   const saveStreakDef = useStore((s) => s.saveStreakDef)
   const deleteStreakDef = useStore((s) => s.deleteStreakDef)
   const toast = useStore((s) => s.toast)
+  const demoActive = useDemoMode((s) => s.active)
+  const isFounder = useFamilyAuthStore((s) => s.isFounder)
+  const plan = useFamilyAuthStore((s) => s.plan)
 
   const [editing, setEditing] = useState<StreakDef | 'new' | null>(null)
   const [deleting, setDeleting] = useState<StreakDef | null>(null)
 
   if (!user) return null
+
+  // Voir BadgeDefsPage.tsx / lib/access.ts pour le raisonnement complet (ajustement du 31/07).
+  const customCount = streakDefs.filter((d) => d.createdBy !== 'system').length
+  const canCreateOrEditCustom = demoActive || canCreateCustom(isFounder, plan, customCount)
+
+  function requestNew() {
+    if (canCreateOrEditCustom) setEditing('new')
+    else toast(`Passez à Premium pour créer plus de ${MAX_FREE_CUSTOM} série personnalisée.`, 'error')
+  }
+
+  function requestEdit(def: StreakDef) {
+    if (def.createdBy !== 'system' || canCreateOrEditCustom) setEditing(def)
+    else toast('Passez à Premium pour modifier les séries du catalogue par défaut.', 'error')
+  }
 
   return (
     <div className="space-y-5">
@@ -170,11 +190,26 @@ export function StreakDefsPage() {
             Globale, sans pénalité, ou liée à une tâche précise — avec leurs paliers de bonus.
           </p>
         </div>
-        <Button onClick={() => setEditing('new')}>
+        <Button onClick={requestNew}>
           <Plus size={18} />
           Nouvelle série
         </Button>
       </div>
+
+      {!canCreateOrEditCustom && (
+        <Card className="flex flex-col items-center gap-2 p-5 text-center">
+          <span className="text-2xl" aria-hidden>
+            ✨
+          </span>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            La formule gratuite inclut {MAX_FREE_CUSTOM} série personnalisée. Passez à Premium pour créer ou modifier
+            les séries du catalogue.
+          </p>
+          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+            Découvrir Premium
+          </Button>
+        </Card>
+      )}
 
       <div className="space-y-3">
         {streakDefs.map((def) => {
@@ -198,7 +233,7 @@ export function StreakDefsPage() {
                   label={def.isActive ? 'Désactiver' : 'Activer'}
                 />
                 <button
-                  onClick={() => setEditing(def)}
+                  onClick={() => requestEdit(def)}
                   aria-label="Modifier la série"
                   className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >

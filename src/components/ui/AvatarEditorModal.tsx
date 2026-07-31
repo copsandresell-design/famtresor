@@ -2,8 +2,10 @@ import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { AVATAR_EMOJIS } from '../../lib/categories'
 import { cn } from '../../lib/cn'
+import { computeAccess } from '../../lib/access'
 import { addPhoto, deletePhoto, removeRemoteProfilePhoto } from '../../lib/photos'
 import { useDemoMode } from '../../store/demoStore'
+import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { useStore } from '../../store/useStore'
 import type { User } from '../../types'
 import { Button } from './Button'
@@ -20,6 +22,10 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
   const demoActive = useDemoMode((s) => s.active)
   const updateAvatar = useStore((s) => s.updateAvatar)
   const toast = useStore((s) => s.toast)
+  const isFounder = useFamilyAuthStore((s) => s.isFounder)
+  const plan = useFamilyAuthStore((s) => s.plan)
+  // GODCLAUDE phase 3 : avatars emoji par défaut toujours gratuits, photo perso premium.
+  const canUsePhoto = demoActive || computeAccess(isFounder, plan, 'custom_avatar_photos')
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<{ file: File; url: string } | null>(null)
@@ -124,11 +130,27 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
           <>
             <ChildAvatar user={user} size="xl" />
             <div className="flex flex-wrap justify-center gap-2">
-              <Button variant="soft" size="sm" onClick={() => cameraRef.current?.click()}>
+              <Button
+                variant="soft"
+                size="sm"
+                onClick={() =>
+                  canUsePhoto
+                    ? cameraRef.current?.click()
+                    : toast('Passez à Premium pour utiliser une photo de profil.', 'error')
+                }
+              >
                 <Camera size={16} />
                 Prendre une photo
               </Button>
-              <Button variant="soft" size="sm" onClick={() => galleryRef.current?.click()}>
+              <Button
+                variant="soft"
+                size="sm"
+                onClick={() =>
+                  canUsePhoto
+                    ? galleryRef.current?.click()
+                    : toast('Passez à Premium pour utiliser une photo de profil.', 'error')
+                }
+              >
                 <ImageIcon size={16} />
                 Choisir dans la galerie
               </Button>

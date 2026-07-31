@@ -10,8 +10,11 @@ import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { Tabs } from '../../components/ui/Tabs'
 import { cn } from '../../lib/cn'
+import { canCreateCustom, MAX_FREE_CUSTOM } from '../../lib/access'
 import { formatRelative } from '../../lib/format'
 import { SHOP_CATEGORIES, SHOP_CATEGORY_KEYS, SHOP_EXAMPLES, SHOP_ICON_LIBRARY } from '../../lib/shopCatalog'
+import { useDemoMode } from '../../store/demoStore'
+import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { ShopCategory, ShopItem } from '../../types'
 
@@ -269,6 +272,9 @@ export function ShopPage() {
   const fulfillRedemption = useStore((s) => s.fulfillRedemption)
   const cancelRedemption = useStore((s) => s.cancelRedemption)
   const toast = useStore((s) => s.toast)
+  const demoActive = useDemoMode((s) => s.active)
+  const isFounder = useFamilyAuthStore((s) => s.isFounder)
+  const plan = useFamilyAuthStore((s) => s.plan)
 
   const [tab, setTab] = useState<'catalogue' | 'voeux' | 'echanges'>('catalogue')
   const [creating, setCreating] = useState(false)
@@ -283,17 +289,49 @@ export function ShopPage() {
   const pendingRedemptions = redemptions.filter((r) => r.status === 'pending')
   const historyRedemptions = redemptions.filter((r) => r.status !== 'pending').slice(0, 20)
 
+  // Ajustement du 31/07 (voir lib/access.ts) : catalogue de départ toujours utilisable/
+  // assignable gratuitement, jusqu'à MAX_FREE_CUSTOM lot(s) personnalisé(s) (createdBy !==
+  // 'system' — inclut un vœu d'enfant approuvé, qui devient lui aussi un lot personnalisé)
+  // avant l'upsell. Mode démo : jamais limité.
+  const customCount = catalogue.filter((i) => i.createdBy !== 'system').length
+  const canCreateOrEditCustom = demoActive || canCreateCustom(isFounder, plan, customCount)
+
   const nameOf = (id?: string) => users.find((u) => u.id === id)?.name ?? '?'
+
+  function requestNew() {
+    if (canCreateOrEditCustom) setCreating(true)
+    else toast(`Passez à Premium pour créer plus de ${MAX_FREE_CUSTOM} lot personnalisé.`, 'error')
+  }
+
+  function requestEdit(item: ShopItem) {
+    if (item.createdBy !== 'system' || canCreateOrEditCustom) setEditingItem(item)
+    else toast('Passez à Premium pour modifier les lots du catalogue par défaut.', 'error')
+  }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-black">Boutique</h1>
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={requestNew}>
           <Plus size={18} />
           Nouveau lot
         </Button>
       </div>
+
+      {!canCreateOrEditCustom && (
+        <Card className="flex flex-col items-center gap-2 p-5 text-center">
+          <span className="text-2xl" aria-hidden>
+            ✨
+          </span>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            La formule gratuite inclut {MAX_FREE_CUSTOM} lot personnalisé. Passez à Premium pour créer ou modifier
+            les lots du catalogue.
+          </p>
+          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+            Découvrir Premium
+          </Button>
+        </Card>
+      )}
 
       <Tabs
         tabs={[
@@ -327,7 +365,7 @@ export function ShopPage() {
                 </div>
                 <span className="font-bold text-violet-600 dark:text-violet-400">{item.cost} pts</span>
                 <button
-                  onClick={() => setEditingItem(item)}
+                  onClick={() => requestEdit(item)}
                   aria-label="Modifier ce lot"
                   className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >

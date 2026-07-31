@@ -194,6 +194,17 @@ export default async function handler(req: any, res: any) {
 
     if (!settings.features.inactivityPenalties && !settings.features.recurringPenalties) continue
 
+    // GODCLAUDE phase 3 : les pénalités automatiques sont une fonctionnalité premium — même
+    // si un réglage local est resté à `true` (donnée pré-existante, changement de plan, bug
+    // frontend...), le cron ne doit jamais les appliquer pour une famille qui n'y a pas
+    // droit. Défense en profondeur : le frontend bloque déjà l'activation du réglage (voir
+    // SettingsPage.tsx), ceci est la vraie garantie côté serveur.
+    const { data: automaticPenaltiesAllowed } = await supabase.rpc('has_family_access', {
+      p_family_id: familyId,
+      p_feature: 'automatic_penalties',
+    })
+    if (!automaticPenaltiesAllowed) continue
+
     const users = await readTable<User>('sync_users', familyId)
     const parents = users.filter((u) => u.role === 'parent' && u.isActive)
     const children = users.filter((u) => u.role === 'child' && u.isActive)

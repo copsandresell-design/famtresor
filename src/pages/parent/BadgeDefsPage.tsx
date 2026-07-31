@@ -8,6 +8,9 @@ import { Field, inputCls } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
 import { Switch } from '../../components/ui/Switch'
 import { CATEGORIES, CATEGORY_KEYS } from '../../lib/categories'
+import { canCreateCustom, MAX_FREE_CUSTOM } from '../../lib/access'
+import { useDemoMode } from '../../store/demoStore'
+import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { BadgeDef, BadgeDefParams, BadgeKind, Category } from '../../types'
 
@@ -203,11 +206,33 @@ export function BadgeDefsPage() {
   const saveBadgeDef = useStore((s) => s.saveBadgeDef)
   const deleteBadgeDef = useStore((s) => s.deleteBadgeDef)
   const toast = useStore((s) => s.toast)
+  const demoActive = useDemoMode((s) => s.active)
+  const isFounder = useFamilyAuthStore((s) => s.isFounder)
+  const plan = useFamilyAuthStore((s) => s.plan)
 
   const [editing, setEditing] = useState<BadgeDef | 'new' | null>(null)
   const [deleting, setDeleting] = useState<BadgeDef | null>(null)
 
   if (!user) return null
+
+  // Ajustement du 31/07 (voir lib/access.ts) : catalogue par défaut toujours consultable/
+  // activable gratuitement, jusqu'à MAX_FREE_CUSTOM badge(s) personnalisé(s) (createdBy !==
+  // 'system') créés OU modifiés librement — au-delà, upsell. Mode démo : jamais limité.
+  const customCount = badgeDefs.filter((d) => d.createdBy !== 'system').length
+  const canCreateOrEditCustom = demoActive || canCreateCustom(isFounder, plan, customCount)
+
+  function requestNew() {
+    if (canCreateOrEditCustom) setEditing('new')
+    else toast(`Passez à Premium pour créer plus de ${MAX_FREE_CUSTOM} badge personnalisé.`, 'error')
+  }
+
+  function requestEdit(def: BadgeDef) {
+    // Un badge du catalogue par défaut ne peut être édité (contenu changé) qu'en premium —
+    // le désactiver reste gratuit (voir le Switch ci-dessous, jamais gaté). Un badge déjà
+    // personnalisé (le sien) reste toujours éditable, il compte déjà dans customCount.
+    if (def.createdBy !== 'system' || canCreateOrEditCustom) setEditing(def)
+    else toast('Passez à Premium pour modifier les badges du catalogue par défaut.', 'error')
+  }
 
   return (
     <div className="space-y-5">
@@ -216,11 +241,26 @@ export function BadgeDefsPage() {
           <h1 className="text-2xl font-black">Badges</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">{badgeDefs.length} badges dans le catalogue.</p>
         </div>
-        <Button onClick={() => setEditing('new')}>
+        <Button onClick={requestNew}>
           <Plus size={18} />
           Nouveau badge
         </Button>
       </div>
+
+      {!canCreateOrEditCustom && (
+        <Card className="flex flex-col items-center gap-2 p-5 text-center">
+          <span className="text-2xl" aria-hidden>
+            ✨
+          </span>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            La formule gratuite inclut {MAX_FREE_CUSTOM} badge personnalisé. Passez à Premium pour créer ou modifier
+            les badges du catalogue.
+          </p>
+          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+            Découvrir Premium
+          </Button>
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {badgeDefs.map((def) => (
@@ -239,7 +279,7 @@ export function BadgeDefsPage() {
               label={def.isActive ? 'Désactiver' : 'Activer'}
             />
             <button
-              onClick={() => setEditing(def)}
+              onClick={() => requestEdit(def)}
               aria-label="Modifier le badge"
               className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             >

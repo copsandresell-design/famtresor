@@ -91,6 +91,8 @@ export function TasksPage() {
       )}
 
       {tab === 'propositions' && suggestionsEnabled ? (
+        // Ajustement du 31/07 : les propositions de tâches sont repassées gratuites (voir
+        // lib/access.ts) — plus de PremiumGate ici.
         <TaskSuggestionsSection />
       ) : (
         <>

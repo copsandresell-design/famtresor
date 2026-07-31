@@ -142,7 +142,12 @@ export const defaultSettings: Settings = {
     leaderboard: true,
     shop: true,
     inactivityPenalties: false,
-    recurringPenalties: true,
+    // GODCLAUDE phase 3 : les pénalités automatiques (récurrentes + inactivité) restent
+    // premium — une famille toute neuve (gratuite par défaut) ne doit pas démarrer avec ce
+    // réglage déjà activé. La famille de Julien n'est pas concernée (ses réglages réels
+    // existent déjà côté Supabase). Ajustement du 31/07 : les propositions de tâches sont
+    // repassées gratuites (voir lib/access.ts), donc de nouveau activées par défaut.
+    recurringPenalties: false,
     taskSuggestions: true,
   },
   pointsPerEuro: 100,

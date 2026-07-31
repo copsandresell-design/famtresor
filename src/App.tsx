@@ -27,6 +27,7 @@ import { ChildShopPage } from './pages/child/ChildShopPage'
 import { SettingsPage } from './pages/parent/SettingsPage'
 import { StreakDefsPage } from './pages/parent/StreakDefsPage'
 import { TasksPage } from './pages/parent/TasksPage'
+import { PremiumGate } from './components/ui/PremiumGate'
 import { useDemoMode } from './store/demoStore'
 import { useFamilyAuthStore } from './store/familyAuthStore'
 import { useStore } from './store/useStore'
@@ -134,15 +135,36 @@ export default function App() {
                 <Route
                   path="stats"
                   element={
-                    <Suspense fallback={<p className="animate-pulse text-center text-2xl">📊</p>}>
-                      <StatsPage />
-                    </Suspense>
+                    <PremiumGate
+                      feature="stats_calendar"
+                      title="Statistiques & calendrier"
+                      description="Passez à Premium pour débloquer les graphiques de progression et le calendrier familial."
+                    >
+                      <Suspense fallback={<p className="animate-pulse text-center text-2xl">📊</p>}>
+                        <StatsPage />
+                      </Suspense>
+                    </PremiumGate>
                   }
                 />
-                <Route path="calendrier" element={<CalendarPage />} />
+                <Route
+                  path="calendrier"
+                  element={
+                    <PremiumGate
+                      feature="stats_calendar"
+                      title="Statistiques & calendrier"
+                      description="Passez à Premium pour débloquer les graphiques de progression et le calendrier familial."
+                    >
+                      <CalendarPage />
+                    </PremiumGate>
+                  }
+                />
                 <Route path="enfants" element={<ChildrenPage />} />
                 <Route path="journal" element={<LogsPage />} />
                 <Route path="reglages" element={<SettingsPage />} />
+                {/* Ajustement du 31/07 : plus de verrou plein-page ici — une famille gratuite
+                    accède à ces pages et peut créer jusqu'à MAX_FREE_CUSTOM élément(s)
+                    personnalisé(s) (voir lib/access.ts canCreateCustom), chaque page gère son
+                    propre dosage en interne (bouton "Nouveau ..." + bandeau d'upsell). */}
                 <Route path="reglages/badges" element={<BadgeDefsPage />} />
                 <Route path="reglages/series" element={<StreakDefsPage />} />
                 <Route path="reglages/rangs" element={<RankDefsPage />} />

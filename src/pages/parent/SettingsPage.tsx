@@ -10,7 +10,10 @@ import { PushNotificationsCard } from '../../components/ui/PushNotificationsCard
 import { Switch } from '../../components/ui/Switch'
 import { cn } from '../../lib/cn'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
+import { computeAccess } from '../../lib/access'
 import { signOutFamily } from '../../lib/familyAuth'
+import { useDemoMode } from '../../store/demoStore'
+import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { FeatureFlags, Theme } from '../../types'
 
@@ -211,6 +214,11 @@ export function SettingsPage() {
   const updateSettings = useStore((s) => s.updateSettings)
   const changeSecret = useStore((s) => s.changeSecret)
   const toast = useStore((s) => s.toast)
+  const demoActive = useDemoMode((s) => s.active)
+  const isFounder = useFamilyAuthStore((s) => s.isFounder)
+  const plan = useFamilyAuthStore((s) => s.plan)
+  // Mode démo : jamais limité (voir components/ui/PremiumGate.tsx).
+  const canUseAutomaticPenalties = demoActive || computeAccess(isFounder, plan, 'automatic_penalties')
 
   const [familyName, setFamilyName] = useState(settings.familyName)
   const [bonus, setBonus] = useState(String(settings.initiativeBonus))
@@ -415,12 +423,15 @@ export function SettingsPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Autorise la création de règles de pénalité automatiques (page Pénalités), ex : chambre pas
               rangée le dimanche soir.
+              {!canUseAutomaticPenalties && ' Fonctionnalité Premium.'}
             </p>
           </div>
           <Switch
             checked={settings.features.recurringPenalties}
             onChange={(checked) =>
-              updateSettings({ features: { ...settings.features, recurringPenalties: checked } }, user.id)
+              !checked || canUseAutomaticPenalties
+                ? updateSettings({ features: { ...settings.features, recurringPenalties: checked } }, user.id)
+                : toast('Passez à Premium pour activer les pénalités automatiques.', 'error')
             }
             label="Pénalités récurrentes"
           />
@@ -476,12 +487,15 @@ export function SettingsPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Pénalité automatique (une fois par jour, via une tâche planifiée) si un enfant n'a validé
               aucune tâche depuis trop longtemps. S'aggrave avec le temps.
+              {!canUseAutomaticPenalties && ' Fonctionnalité Premium.'}
             </p>
           </div>
           <Switch
             checked={settings.features.inactivityPenalties}
             onChange={(checked) =>
-              updateSettings({ features: { ...settings.features, inactivityPenalties: checked } }, user.id)
+              !checked || canUseAutomaticPenalties
+                ? updateSettings({ features: { ...settings.features, inactivityPenalties: checked } }, user.id)
+                : toast('Passez à Premium pour activer les pénalités automatiques.', 'error')
             }
             label="Pénalités d'inactivité"
           />

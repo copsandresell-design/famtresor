@@ -15,19 +15,25 @@ interface FamilyAuthState {
   status: FamilyAuthStatus
   supabaseUserId: string | null
   familyId: string | null
+  /** Mis en cache pour un accès synchrone (voir lib/access.ts computeAccess) — la vraie
+   *  autorité reste has_family_access() côté Postgres (lib/access.ts hasAccess(), RPC). */
+  isFounder: boolean
+  plan: 'free' | 'premium'
 }
 
 export const useFamilyAuthStore = create<FamilyAuthState>(() => ({
   status: 'loading',
   supabaseUserId: null,
   familyId: null,
+  isFounder: false,
+  plan: 'free',
 }))
 
-/** Relit family_members pour le compte courant — à rappeler juste après
- *  create_family_for_current_user()/claim_founder_family() pour faire passer le statut de
- *  'needs-family' à 'ready' sans attendre un futur événement onAuthStateChange (qui ne se
- *  redéclenche pas juste parce que la famille a changé, la session Supabase Auth elle-même
- *  n'ayant pas bougé). */
+/** Relit family_members (+ families.is_founder/plan) pour le compte courant — à rappeler
+ *  juste après create_family_for_current_user()/claim_founder_family() pour faire passer le
+ *  statut de 'needs-family' à 'ready' sans attendre un futur événement onAuthStateChange (qui
+ *  ne se redéclenche pas juste parce que la famille a changé, la session Supabase Auth
+ *  elle-même n'ayant pas bougé). */
 export async function refreshFamilyMembership(): Promise<void> {
   const { data: sessionData } = await supabase.auth.getSession()
   const userId = sessionData.session?.user.id
@@ -36,10 +42,21 @@ export async function refreshFamilyMembership(): Promise<void> {
     return
   }
   const { data } = await supabase.from('family_members').select('family_id').eq('user_id', userId).maybeSingle()
+  if (!data) {
+    useFamilyAuthStore.setState({ status: 'needs-family', supabaseUserId: userId, familyId: null })
+    return
+  }
+  const { data: family } = await supabase
+    .from('families')
+    .select('is_founder, plan')
+    .eq('id', data.family_id)
+    .maybeSingle()
   useFamilyAuthStore.setState({
-    status: data ? 'ready' : 'needs-family',
+    status: 'ready',
     supabaseUserId: userId,
-    familyId: data?.family_id ?? null,
+    familyId: data.family_id,
+    isFounder: family?.is_founder ?? false,
+    plan: (family?.plan as 'free' | 'premium') ?? 'free',
   })
 }
 
