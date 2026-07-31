@@ -15,6 +15,7 @@ import { formatRelative } from '../../lib/format'
 import { SHOP_CATEGORIES, SHOP_CATEGORY_KEYS, SHOP_EXAMPLES, SHOP_ICON_LIBRARY } from '../../lib/shopCatalog'
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
+import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { ShopCategory, ShopItem } from '../../types'
 
@@ -275,6 +276,7 @@ export function ShopPage() {
   const demoActive = useDemoMode((s) => s.active)
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
+  const showUpsell = usePremiumUpsellStore((s) => s.show)
 
   const [tab, setTab] = useState<'catalogue' | 'voeux' | 'echanges'>('catalogue')
   const [creating, setCreating] = useState(false)
@@ -300,12 +302,12 @@ export function ShopPage() {
 
   function requestNew() {
     if (canCreateOrEditCustom) setCreating(true)
-    else toast(`Passez à Premium pour créer plus de ${MAX_FREE_CUSTOM} lot personnalisé.`, 'error')
+    else showUpsell()
   }
 
   function requestEdit(item: ShopItem) {
     if (item.createdBy !== 'system' || canCreateOrEditCustom) setEditingItem(item)
-    else toast('Passez à Premium pour modifier les lots du catalogue par défaut.', 'error')
+    else showUpsell()
   }
 
   return (
@@ -327,7 +329,7 @@ export function ShopPage() {
             La formule gratuite inclut {MAX_FREE_CUSTOM} lot personnalisé. Passez à Premium pour créer ou modifier
             les lots du catalogue.
           </p>
-          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+          <Button size="sm" onClick={showUpsell}>
             Découvrir Premium
           </Button>
         </Card>

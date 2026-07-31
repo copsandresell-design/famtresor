@@ -11,6 +11,7 @@ import { CATEGORIES, CATEGORY_KEYS } from '../../lib/categories'
 import { canCreateCustom, MAX_FREE_CUSTOM } from '../../lib/access'
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
+import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { BadgeDef, BadgeDefParams, BadgeKind, Category } from '../../types'
 
@@ -209,6 +210,7 @@ export function BadgeDefsPage() {
   const demoActive = useDemoMode((s) => s.active)
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
+  const showUpsell = usePremiumUpsellStore((s) => s.show)
 
   const [editing, setEditing] = useState<BadgeDef | 'new' | null>(null)
   const [deleting, setDeleting] = useState<BadgeDef | null>(null)
@@ -223,7 +225,7 @@ export function BadgeDefsPage() {
 
   function requestNew() {
     if (canCreateOrEditCustom) setEditing('new')
-    else toast(`Passez à Premium pour créer plus de ${MAX_FREE_CUSTOM} badge personnalisé.`, 'error')
+    else showUpsell()
   }
 
   function requestEdit(def: BadgeDef) {
@@ -231,7 +233,7 @@ export function BadgeDefsPage() {
     // le désactiver reste gratuit (voir le Switch ci-dessous, jamais gaté). Un badge déjà
     // personnalisé (le sien) reste toujours éditable, il compte déjà dans customCount.
     if (def.createdBy !== 'system' || canCreateOrEditCustom) setEditing(def)
-    else toast('Passez à Premium pour modifier les badges du catalogue par défaut.', 'error')
+    else showUpsell()
   }
 
   return (
@@ -256,7 +258,7 @@ export function BadgeDefsPage() {
             La formule gratuite inclut {MAX_FREE_CUSTOM} badge personnalisé. Passez à Premium pour créer ou modifier
             les badges du catalogue.
           </p>
-          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+          <Button size="sm" onClick={showUpsell}>
             Découvrir Premium
           </Button>
         </Card>

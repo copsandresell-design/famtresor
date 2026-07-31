@@ -1,7 +1,8 @@
 # GODCLAUDE — Transformation multi-familles + freemium
 
-Point d'avancement : **Phases 1, 2 et 3 terminées et vérifiées. Phases 4 (Stripe) et 5
-(packs cosmétiques) NON commencées.**
+Point d'avancement : **Phases 1, 2, 3 et 4 terminées et vérifiées (dans la limite de ce qui
+est testable sans compte Stripe réel — voir section Phase 4). Phase 5 (packs cosmétiques)
+NON commencée.**
 
 Conformément à la consigne reçue ("avance autant de phases que possible, arrête-toi après
 la phase la plus avancée correctement terminée et vérifiée, documente où et pourquoi"), ce
@@ -17,14 +18,20 @@ Avant d'implémenter la phase 3, une question de clarification a été posée su
 Les choix suivants ont donc été faits de façon autonome et sont **à valider/ajuster** :
 
 - Catalogue **tâches** : reste librement personnalisable en gratuit (cœur de l'usage
-  quotidien). Catalogue **boutique** : le catalogue de départ (12 lots) reste
-  utilisable/assignable gratuitement, mais créer ou modifier un lot personnalisé est premium.
+  quotidien).
 - Fonctionnalités passées premium : Stats & Calendrier, pénalités automatiques (inactivité +
-  récurrentes), personnalisation des séries/badges/rangs (les catalogues par défaut restent
-  utilisables gratuitement, juste pas éditables), propositions de tâches par les enfants.
-- Activation premium en attendant Stripe (phase 4) : colonne `families.plan` modifiable à la
-  main en SQL (`UPDATE families SET plan = 'premium' WHERE id = '<family_id>'`) — pas
-  d'écran admin dédié pour l'instant.
+  récurrentes), photos de profil personnalisées (avatars emoji par défaut toujours gratuits).
+- Personnalisation **boutique/séries/badges/rangs** : pas un mur total — une famille gratuite
+  peut créer/modifier `MAX_FREE_CUSTOM` (1) élément personnalisé par catégorie avant l'upsell
+  (les catalogues par défaut restent toujours consultables/activables gratuitement, quel que
+  soit ce nombre). Donne un vrai avant-goût plutôt qu'un blocage dès le premier usage.
+- **Propositions de tâches par les enfants : restées entièrement gratuites**, sans condition
+  — seule fonctionnalité premium envisagée qui touchait directement l'expérience de l'ENFANT
+  (agence/engagement), donc la seule où une restriction risquait de casser l'usage quotidien
+  avant même qu'un parent n'envisage de payer.
+- Activation premium avant/en dehors de Stripe (phase 4, maintenant faite) : colonne
+  `families.plan` reste modifiable à la main en SQL en secours
+  (`UPDATE families SET plan = 'premium' WHERE id = '<family_id>'`) — pas d'écran admin dédié.
 
 ## Pourquoi s'arrêter ici
 
@@ -234,6 +241,72 @@ production), servie sur un port dev jetable, pilotée par Playwright :
 La copie jetable a été supprimée après le test ; aucune donnée de production n'a été
 touchée à aucun moment.
 
+## Ce qui a été fait — Phase 4 (facturation Stripe, mode TEST)
+
+- `supabase/migrations/20260731020000_phase4_stripe_billing.sql` : ajoute à `families`
+  `stripe_customer_id` (index unique), `stripe_subscription_id`, `premium_interval`
+  (`'monthly'`/`'annual'`). Aucune policy RLS d'écriture ajoutée (cohérent avec le reste de
+  `families` : mutations serveur uniquement).
+- `api/create-checkout-session.ts` : vérifie le JWT Supabase du parent (`supabase.auth.getUser`),
+  retrouve sa famille via `family_members` (RLS), crée une session Stripe Checkout (mode
+  `subscription`, `client_reference_id`/`metadata.family_id` = la famille) et renvoie l'URL —
+  n'écrit RIEN dans `families` (c'est le webhook qui fait foi, une fois le paiement réellement
+  confirmé par Stripe).
+- `api/create-portal-session.ts` : même vérification, ouvre le portail de facturation Stripe
+  (gérer moyen de paiement / annuler) pour la famille du parent courant.
+- `api/stripe-webhook.ts` : **seule source de vérité** qui fait passer `families.plan`. Vérifie
+  la signature Stripe (`stripe.webhooks.constructEvent`, corps brut — `bodyParser: false`),
+  traite `checkout.session.completed` (premier paiement), `customer.subscription.updated`
+  (renouvellement/changement) et `customer.subscription.deleted` (résiliation). **Ne touche
+  jamais la famille fondatrice** (`.eq('is_founder', false)` sur les mises à jour venant d'un
+  abonnement) — même si son `stripe_customer_id` était un jour lié par erreur à un test Stripe,
+  son `plan` ne peut pas être rétrogradé par ce chemin.
+- Garde-fou non-négociable répété dans les 3 fichiers : refuse de démarrer si
+  `STRIPE_SECRET_KEY` ne commence pas par `sk_test_` — bloque toute clé live par erreur.
+- Frontend : `src/lib/billing.ts` (`startCheckout`/`openBillingPortal`, appellent les
+  endpoints ci-dessus puis redirigent vers l'URL Stripe hébergée renvoyée — le frontend ne
+  connaît AUCUN secret Stripe et n'appelle jamais l'API Stripe directement),
+  `src/store/premiumUpsellStore.ts` + `src/components/ui/PremiumUpsellModal.tsx` (un seul
+  modal Premium, monté une fois dans `App.tsx`, déclenché par TOUS les points d'upsell —
+  `PremiumGate`, `ChildrenPage`, `ShopPage`, `BadgeDefsPage`/`StreakDefsPage`/`RankDefsPage`,
+  `AvatarEditorModal`, `SettingsPage` — plutôt que de dupliquer un flux de paiement partout).
+  Pas de prix affiché dans le modal (volontaire : le vrai prix vient de Stripe, l'afficher
+  ici risquerait de désynchroniser). `SettingsPage.tsx` : nouvelle carte "Premium" (statut +
+  bouton "Gérer mon abonnement" si déjà abonné) et détection du retour de Checkout
+  (`?premium=success`) qui relit le statut famille en boucle courte (5 tentatives, 1,5 s
+  d'écart) le temps que le webhook ait pu traiter l'événement.
+
+### Vérifié (sans compte Stripe réel — voir ce qui NE l'est PAS juste après)
+
+La vérification de signature Stripe est un HMAC purement local (`stripe.webhooks.constructEvent`
+ne fait AUCUN appel réseau à Stripe) : entièrement testable sans compte Stripe.
+
+- Signature invalide/forgée → rejetée (400), sans toucher la base.
+- `customer.subscription.updated` (signé avec un vrai HMAC de test, événement synthétique)
+  avec `status: 'active'` → famille passée à `plan = 'premium'`, `stripe_subscription_id` et
+  `premium_interval` correctement renseignés.
+- `customer.subscription.deleted` → famille repassée à `plan = 'free'`,
+  `stripe_subscription_id` vidé.
+- **Famille fondatrice jamais touchée** : même test rejoué avec le `stripe_customer_id` de la
+  famille fondatrice → son `plan` reste `'premium'` et ses colonnes Stripe restent vides,
+  confirmant que la clause `is_founder = false` protège bien contre toute rétrogradation.
+- Flux frontend (navigateur réel, requête réseau interceptée/mockée avec Playwright, comme
+  pour les phases précédentes) : depuis une page gatée d'une famille gratuite, "Découvrir
+  Premium" ouvre le modal, "Mensuel" envoie bien une requête `POST /api/create-checkout-session`
+  authentifiée (JWT en en-tête) avec `{ interval: 'monthly' }`.
+
+### PAS vérifié (nécessite un vrai compte Stripe test — hors de portée sans accès à ce compte)
+
+- Le chemin `checkout.session.completed` appelle `stripe.subscriptions.retrieve()` (vrai appel
+  réseau à l'API Stripe) pour connaître l'intervalle de l'abonnement — non testable sans
+  connectivité Stripe réelle.
+- Le vrai clic-à-clic complet (redirection vers la vraie page Stripe Checkout, paiement avec
+  une carte de test, retour sur `/parent/reglages?premium=success`, réception réelle du
+  webhook par Vercel) n'a pas pu être exécuté : nécessite un compte Stripe (test) que je n'ai
+  pas et ne peux pas créer. **Julien doit faire ce test réel après déploiement** (carte de
+  test Stripe `4242 4242 4242 4242`, n'importe quelle date future / CVC) pour confirmer le
+  chemin complet — voir "Déploiement" ci-dessous pour la configuration préalable requise.
+
 ## tsc / tests / build
 
 `npx tsc -b`, `npm test -- --run` (63 tests, tous passants) et `npm run build` : tous verts
@@ -256,6 +329,8 @@ déploiement sans supervision directe). Séquence à suivre, dans cet ordre exac
    - `supabase/migrations/20260730010000_multi_family_phase1.sql`
    - `supabase/migrations/20260730020000_phase2_founder_access.sql`
    - `supabase/migrations/20260731000000_phase3_freemium_plan.sql`
+   - `supabase/migrations/20260731010000_phase3_adjust_free_split.sql`
+   - `supabase/migrations/20260731020000_phase4_stripe_billing.sql`
 2. **Immédiatement après**, récupérer les codes de rattachement de la famille fondatrice :
    ```sql
    SELECT label, code FROM family_claim_codes
@@ -265,24 +340,45 @@ déploiement sans supervision directe). Séquence à suivre, dans cet ordre exac
    Deux codes sont générés ("parent 1", "parent 2") — un pour Julien, un pour Marion si elle
    veut son propre compte. Chaque code est à usage unique (supprimé automatiquement une fois
    utilisé par `claim_founder_family`).
-3. **Déployer le frontend** (`git push` sur `main`, déploiement Vercel automatique).
-4. **Immédiatement après le déploiement**, sur kids-up.vercel.app : créer un compte
+3. **Configurer Stripe (mode TEST — ne jamais activer le mode live ici)** avant de déployer,
+   sinon les boutons "Découvrir Premium" échoueront (pas bloquant pour le reste de l'app) :
+   - Dans le Dashboard Stripe, vérifier que le bouton "Test mode" est actif.
+   - Créer un Produit "KidsUp Premium" avec deux Prix récurrents : mensuel et annuel. Noter
+     leurs `price_id` (`price_...`).
+   - Récupérer la clé secrète de test (`sk_test_...`) dans Développeurs → Clés API.
+   - Créer un endpoint webhook (Développeurs → Webhooks) pointant vers
+     `https://kids-up.vercel.app/api/stripe-webhook`, écoutant au minimum :
+     `checkout.session.completed`, `customer.subscription.updated`,
+     `customer.subscription.deleted`. Récupérer son secret de signature (`whsec_...`).
+   - Sur Vercel (Project Settings → Environment Variables), ajouter : `STRIPE_SECRET_KEY`
+     (`sk_test_...`), `STRIPE_WEBHOOK_SECRET` (`whsec_...`), `STRIPE_PRICE_MONTHLY`
+     (`price_...`), `STRIPE_PRICE_ANNUAL` (`price_...`).
+4. **Déployer le frontend** (`git push` sur `main`, déploiement Vercel automatique).
+5. **Immédiatement après le déploiement**, sur kids-up.vercel.app : créer un compte
    (email + mot de passe, différent du PIN existant), choisir "J'ai un code", coller un des
    deux codes récupérés à l'étape 2. Le picker PIN habituel doit alors réapparaître avec
    Julien/Marion/Kelly/Hugo/Lorenzo/Kenzo exactement comme avant.
+6. **Test réel du paiement** (le seul morceau de tout GODCLAUDE que je n'ai pas pu vérifier
+   moi-même, faute de compte Stripe) : sur une famille de test (pas la famille fondatrice —
+   elle a déjà tout, gratuitement, et n'a jamais besoin de payer), déclencher un upsell,
+   choisir Mensuel ou Annuel, payer avec la carte de test Stripe `4242 4242 4242 4242`
+   (n'importe quelle date d'expiration future, n'importe quel CVC à 3 chiffres), confirmer
+   que le retour sur `/parent/reglages` affiche bien "Abonnement Premium actif" après
+   quelques secondes.
 
-Tant que l'étape 4 n'est pas faite, personne dans la famille ne peut utiliser l'app déployée
-— à faire dans la foulée du déploiement, pas "plus tard dans la journée".
+Tant que l'étape 5 n'est pas faite, personne dans la famille ne peut utiliser l'app déployée
+— à faire dans la foulée du déploiement, pas "plus tard dans la journée". L'étape 6 n'est pas
+bloquante pour la famille de Julien (qui n'en a pas besoin) mais doit être faite avant
+d'annoncer Premium à de vraies familles.
 
-## Ce qui reste — Phases 4, 5 (non commencées)
+## Ce qui reste — Phase 5 (non commencée)
 
-- **Phase 4** : facturation Stripe, clés TEST uniquement, mensuel/annuel, webhook Vercel qui
-  passera `families.plan` à `'premium'` (colonne déjà posée en phase 3, actuellement modifiée
-  à la main en attendant).
 - **Phase 5** : packs cosmétiques (Dinosaures, Pirates, Fées & licornes, Robots), config
   extensible, vente à l'unité ou avec le premium via Stripe test mode — passera par
-  `has_family_access()` (déjà prêt, phase 2/3) avec de nouvelles clés `FeatureKey`.
+  `has_family_access()` (déjà prêt, phase 2/3/4) avec de nouvelles clés `FeatureKey`, et
+  réutilisera le flux de paiement Stripe déjà en place (phase 4) plutôt que d'en refaire un.
 
-Aucune de ces deux phases n'a de code écrit à ce stade. La phase 3 a volontairement fait des
-choix produit sans validation explicite (voir section dédiée en haut de ce document) — à
-relire avant de passer aux phases 4/5, certains verrous pourraient devoir être ajustés.
+Aucun code n'a été écrit pour cette phase à ce stade. Les phases 3/4 ont fait des choix
+produit sans validation explicite de l'utilisateur (voir section dédiée en haut de ce
+document) — à relire avant de passer à la phase 5, certains verrous ou le modèle de pricing
+pourraient devoir être ajustés.

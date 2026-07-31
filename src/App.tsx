@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ChildLayout } from './components/layout/ChildLayout'
 import { ParentLayout } from './components/layout/ParentLayout'
 import { AmbientBackground } from './components/ui/AmbientBackground'
+import { PremiumUpsellModal } from './components/ui/PremiumUpsellModal'
 import { Toaster } from './components/Toaster'
 import { UpdateBanner } from './components/UpdateBanner'
 import { useDataRealtime } from './hooks/useDataSync'
@@ -185,6 +186,7 @@ export default function App() {
           )}
         </Routes>
         <Toaster />
+        <PremiumUpsellModal />
       </BrowserRouter>
     </MotionConfig>
   )

@@ -6,6 +6,7 @@ import { computeAccess } from '../../lib/access'
 import { addPhoto, deletePhoto, removeRemoteProfilePhoto } from '../../lib/photos'
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
+import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { useStore } from '../../store/useStore'
 import type { User } from '../../types'
 import { Button } from './Button'
@@ -24,6 +25,7 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
   const toast = useStore((s) => s.toast)
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
+  const showUpsell = usePremiumUpsellStore((s) => s.show)
   // GODCLAUDE phase 3 : avatars emoji par défaut toujours gratuits, photo perso premium.
   const canUsePhoto = demoActive || computeAccess(isFounder, plan, 'custom_avatar_photos')
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -136,7 +138,7 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
                 onClick={() =>
                   canUsePhoto
                     ? cameraRef.current?.click()
-                    : toast('Passez à Premium pour utiliser une photo de profil.', 'error')
+                    : showUpsell()
                 }
               >
                 <Camera size={16} />
@@ -148,7 +150,7 @@ export function AvatarEditorModal({ user, actorId, onClose }: Props) {
                 onClick={() =>
                   canUsePhoto
                     ? galleryRef.current?.click()
-                    : toast('Passez à Premium pour utiliser une photo de profil.', 'error')
+                    : showUpsell()
                 }
               >
                 <ImageIcon size={16} />

@@ -11,6 +11,7 @@ import { AVATAR_EMOJIS } from '../../lib/categories'
 import { canCreateCustom, MAX_FREE_CUSTOM } from '../../lib/access'
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
+import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { RankDef } from '../../types'
 
@@ -107,6 +108,7 @@ export function RankDefsPage() {
   const demoActive = useDemoMode((s) => s.active)
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
+  const showUpsell = usePremiumUpsellStore((s) => s.show)
 
   const [editing, setEditing] = useState<RankDef | 'new' | null>(null)
   const [deleting, setDeleting] = useState<RankDef | null>(null)
@@ -121,12 +123,12 @@ export function RankDefsPage() {
 
   function requestNew() {
     if (canCreateOrEditCustom) setEditing('new')
-    else toast(`Passez à Premium pour créer plus de ${MAX_FREE_CUSTOM} rang personnalisé.`, 'error')
+    else showUpsell()
   }
 
   function requestEdit(def: RankDef) {
     if (def.createdBy !== 'system' || canCreateOrEditCustom) setEditing(def)
-    else toast('Passez à Premium pour modifier les rangs du catalogue par défaut.', 'error')
+    else showUpsell()
   }
 
   return (
@@ -153,7 +155,7 @@ export function RankDefsPage() {
             La formule gratuite inclut {MAX_FREE_CUSTOM} rang personnalisé. Passez à Premium pour créer ou modifier
             les rangs du catalogue.
           </p>
-          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+          <Button size="sm" onClick={showUpsell}>
             Découvrir Premium
           </Button>
         </Card>

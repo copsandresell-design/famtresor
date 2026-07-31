@@ -1,6 +1,6 @@
 import { ChevronRight, Medal, Sparkles, Trophy } from 'lucide-react'
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { OnboardingTour } from '../../components/OnboardingTour'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -11,9 +11,11 @@ import { Switch } from '../../components/ui/Switch'
 import { cn } from '../../lib/cn'
 import { centsToEuroInput, euroToCents } from '../../lib/format'
 import { computeAccess } from '../../lib/access'
+import { openBillingPortal } from '../../lib/billing'
 import { signOutFamily } from '../../lib/familyAuth'
 import { useDemoMode } from '../../store/demoStore'
-import { useFamilyAuthStore } from '../../store/familyAuthStore'
+import { refreshFamilyMembership, useFamilyAuthStore } from '../../store/familyAuthStore'
+import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { FeatureFlags, Theme } from '../../types'
 
@@ -217,6 +219,7 @@ export function SettingsPage() {
   const demoActive = useDemoMode((s) => s.active)
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
+  const showUpsell = usePremiumUpsellStore((s) => s.show)
   // Mode démo : jamais limité (voir components/ui/PremiumGate.tsx).
   const canUseAutomaticPenalties = demoActive || computeAccess(isFounder, plan, 'automatic_penalties')
 
@@ -233,6 +236,24 @@ export function SettingsPage() {
   const [weeklyCapAmount, setWeeklyCapAmount] = useState(String(settings.weeklyPointsCap.amount))
   const [reminderHour, setReminderHour] = useState(String(settings.dailyReminder.hour))
   const [showTutorial, setShowTutorial] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Retour de Stripe Checkout (voir api/create-checkout-session.ts success_url) : le webhook
+  // Stripe (api/stripe-webhook.ts) est ce qui fait réellement foi pour passer plan à
+  // 'premium', pas ce redirect — mais il peut ne pas encore avoir traité l'événement au
+  // moment où l'utilisateur revient ici. On relit quelques fois avec un court délai plutôt
+  // qu'une seule fois immédiatement.
+  useEffect(() => {
+    if (searchParams.get('premium') !== 'success') return
+    setSearchParams({}, { replace: true })
+    let attempts = 0
+    const interval = setInterval(async () => {
+      attempts += 1
+      await refreshFamilyMembership()
+      if (useFamilyAuthStore.getState().plan === 'premium' || attempts >= 5) clearInterval(interval)
+    }, 1500)
+    return () => clearInterval(interval)
+  }, [searchParams, setSearchParams])
 
   if (!user) return null
 
@@ -431,7 +452,7 @@ export function SettingsPage() {
             onChange={(checked) =>
               !checked || canUseAutomaticPenalties
                 ? updateSettings({ features: { ...settings.features, recurringPenalties: checked } }, user.id)
-                : toast('Passez à Premium pour activer les pénalités automatiques.', 'error')
+                : showUpsell()
             }
             label="Pénalités récurrentes"
           />
@@ -495,7 +516,7 @@ export function SettingsPage() {
             onChange={(checked) =>
               !checked || canUseAutomaticPenalties
                 ? updateSettings({ features: { ...settings.features, inactivityPenalties: checked } }, user.id)
-                : toast('Passez à Premium pour activer les pénalités automatiques.', 'error')
+                : showUpsell()
             }
             label="Pénalités d'inactivité"
           />
@@ -685,6 +706,40 @@ export function SettingsPage() {
         <p className="text-xs text-slate-400">
           Les PIN des enfants se changent depuis la page Enfants.
         </p>
+      </Card>
+
+      <Card className="space-y-3 p-5">
+        <h2 className="font-bold">Premium</h2>
+        {isFounder ? (
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Famille fondatrice : accès complet et gratuit à vie, aucun abonnement nécessaire.
+          </p>
+        ) : plan === 'premium' ? (
+          <>
+            <p className="text-sm text-slate-600 dark:text-slate-300">Abonnement Premium actif.</p>
+            <div className="flex justify-end">
+              <Button
+                variant="soft"
+                onClick={async () => {
+                  const err = await openBillingPortal()
+                  if (err) toast(err, 'error')
+                }}
+              >
+                Gérer mon abonnement
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Formule gratuite. Passez à Premium pour débloquer les enfants illimités, les photos de
+              profil, les statistiques, le calendrier, et plus.
+            </p>
+            <div className="flex justify-end">
+              <Button onClick={showUpsell}>Découvrir Premium</Button>
+            </div>
+          </>
+        )}
       </Card>
 
       <Card className="space-y-3 p-5">

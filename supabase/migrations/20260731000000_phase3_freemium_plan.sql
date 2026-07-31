@@ -12,6 +12,11 @@
 -- enfants passent premium. Limite gratuite : 2 enfants max (vérifiée côté frontend, pas
 -- ici — voir plus bas pourquoi).
 --
+-- NB (31/07) : ce fichier est laissé tel qu'écrit à l'origine (migrations = historique
+-- immuable) — l'ajustement produit qui retire 'task_suggestions' de la liste verrouillée et
+-- introduit la limite "1 élément personnalisé gratuit" est une migration séparée qui
+-- s'applique après celle-ci : voir 20260731010000_phase3_adjust_free_split.sql.
+--
 -- Pas de Stripe (phase 4 non commencée) : `plan` est modifiable à la main en SQL en
 -- attendant :
 --   UPDATE families SET plan = 'premium' WHERE id = '<family_id>';

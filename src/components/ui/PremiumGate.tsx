@@ -3,13 +3,13 @@ import type { FeatureKey } from '../../lib/access'
 import { computeAccess } from '../../lib/access'
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
-import { useStore } from '../../store/useStore'
+import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { Button } from './Button'
 import { Card } from './Card'
 
-// GODCLAUDE phase 3 : verrou UI unique pour les fonctionnalités premium, TOUJOURS côté
-// parent (jamais montré aux enfants — voir usages). Pas de vrai paiement tant que la phase 4
-// (Stripe, non commencée) n'existe pas : le bouton affiche juste un message d'attente.
+// GODCLAUDE phase 3/4 : verrou UI unique pour les fonctionnalités premium, TOUJOURS côté
+// parent (jamais montré aux enfants — voir usages). Le bouton ouvre le vrai modal de
+// paiement Stripe (voir PremiumUpsellModal.tsx).
 export function PremiumGate({
   feature,
   title,
@@ -24,7 +24,7 @@ export function PremiumGate({
   const demoActive = useDemoMode((s) => s.active)
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
-  const toast = useStore((s) => s.toast)
+  const showUpsell = usePremiumUpsellStore((s) => s.show)
 
   // Mode démo : toujours tout montrer (démo = vitrine complète), indépendamment du statut
   // Supabase Auth réel de l'appareil (useFamilyAuthStore n'est jamais démo-consciente).
@@ -37,9 +37,7 @@ export function PremiumGate({
       </span>
       <h2 className="font-bold">{title}</h2>
       <p className="text-sm text-slate-500 dark:text-slate-400">{description}</p>
-      <Button onClick={() => toast('Le paiement Premium arrive bientôt !', 'success')}>
-        Découvrir Premium
-      </Button>
+      <Button onClick={showUpsell}>Découvrir Premium</Button>
     </Card>
   )
 }

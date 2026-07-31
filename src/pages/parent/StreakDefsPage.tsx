@@ -10,6 +10,7 @@ import { Switch } from '../../components/ui/Switch'
 import { canCreateCustom, MAX_FREE_CUSTOM } from '../../lib/access'
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
+import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { StreakDef, StreakKind, StreakTier } from '../../types'
 
@@ -161,6 +162,7 @@ export function StreakDefsPage() {
   const demoActive = useDemoMode((s) => s.active)
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
+  const showUpsell = usePremiumUpsellStore((s) => s.show)
 
   const [editing, setEditing] = useState<StreakDef | 'new' | null>(null)
   const [deleting, setDeleting] = useState<StreakDef | null>(null)
@@ -173,12 +175,12 @@ export function StreakDefsPage() {
 
   function requestNew() {
     if (canCreateOrEditCustom) setEditing('new')
-    else toast(`Passez à Premium pour créer plus de ${MAX_FREE_CUSTOM} série personnalisée.`, 'error')
+    else showUpsell()
   }
 
   function requestEdit(def: StreakDef) {
     if (def.createdBy !== 'system' || canCreateOrEditCustom) setEditing(def)
-    else toast('Passez à Premium pour modifier les séries du catalogue par défaut.', 'error')
+    else showUpsell()
   }
 
   return (
@@ -205,7 +207,7 @@ export function StreakDefsPage() {
             La formule gratuite inclut {MAX_FREE_CUSTOM} série personnalisée. Passez à Premium pour créer ou modifier
             les séries du catalogue.
           </p>
-          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+          <Button size="sm" onClick={showUpsell}>
             Découvrir Premium
           </Button>
         </Card>

@@ -20,6 +20,7 @@ import { computeRank } from '../../lib/ranks'
 import { MAX_FREE_CHILDREN } from '../../lib/access'
 import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
+import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
 import type { Role, User } from '../../types'
 
@@ -211,6 +212,7 @@ export function ChildrenPage() {
   const demoActive = useDemoMode((s) => s.active)
   const isFounder = useFamilyAuthStore((s) => s.isFounder)
   const plan = useFamilyAuthStore((s) => s.plan)
+  const showUpsell = usePremiumUpsellStore((s) => s.show)
 
   const [editing, setEditing] = useState<User | null>(null)
   const [resetting, setResetting] = useState<User | null>(null)
@@ -229,7 +231,7 @@ export function ChildrenPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-black">Enfants</h1>
-        <Button onClick={() => (atFreeLimit ? toast(`Passez à Premium pour dépasser ${MAX_FREE_CHILDREN} enfants.`, 'error') : setCreating(true))}>
+        <Button onClick={() => (atFreeLimit ? showUpsell() : setCreating(true))}>
           <Plus size={18} />
           Nouveau profil
         </Button>
@@ -244,7 +246,7 @@ export function ChildrenPage() {
             La formule gratuite est limitée à {MAX_FREE_CHILDREN} enfants. Passez à Premium pour en ajouter
             davantage.
           </p>
-          <Button size="sm" onClick={() => toast('Le paiement Premium arrive bientôt !')}>
+          <Button size="sm" onClick={showUpsell}>
             Découvrir Premium
           </Button>
         </Card>
