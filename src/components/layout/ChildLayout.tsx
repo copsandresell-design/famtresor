@@ -32,10 +32,19 @@ export function ChildLayout() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header
-        className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-3 pb-4 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
-        style={{ borderTopColor: user.color, borderTopWidth: 4 }}
-      >
+      <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-3 pb-4 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+        {/* Barre d'accent couleur de l'enfant : un border-top se dessine avant le padding, donc
+            avant la zone de sécurité (pt-[...] ci-dessus) — sur iPhone (barre de statut
+            "black-translucent", voir index.html), elle apparaissait comme un bandeau coloré
+            détaché derrière l'heure, au lieu d'être collée au reste de l'en-tête. En la
+            positionnant explicitement à env(safe-area-inset-top), elle reste au même endroit
+            visuel qu'avant sur desktop/Android (où cet inset vaut 0) mais descend correctement
+            sous l'encoche/la barre de statut sur iPhone. */}
+        <span
+          className="absolute inset-x-0 h-1"
+          style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: user.color }}
+          aria-hidden
+        />
         <img src="/images/kidsup-logo.png" alt="KidsUp" className="h-14 w-auto shrink-0" />
         <ChildAvatar user={user} size="sm" />
         <p className="min-w-0 flex-1 truncate text-base font-black">{user.name}</p>
