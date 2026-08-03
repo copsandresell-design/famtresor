@@ -7,6 +7,7 @@ import { computeBalance } from '../lib/balance'
 import { hashSecret, makeSalt, verifySecret } from '../lib/crypto'
 import { formatEuro } from '../lib/format'
 import { uid } from '../lib/id'
+import { computeLoans } from '../lib/loans'
 import { capWeeklyGain, computePoints, computeTaskPoints } from '../lib/points'
 import { DEFAULT_RANK_DEFS } from '../lib/ranks'
 import { broadcastNotification } from '../lib/realtime'
@@ -273,6 +274,23 @@ export interface Store {
   cancelRedemption: (redemptionId: string, actorId: string) => void
   convertPointsToMoney: (childId: string, points: number, actorId: string) => boolean
 
+  /** Transfert de points entre enfants, cadeau sans suivi de remboursement. */
+  giftPoints: (fromChildId: string, toChildId: string, amount: number, note: string, actorId: string) => boolean
+  /** Transfert de points entre enfants avec suivi de dette — voir lib/loans.ts (reconstruit
+   *  depuis pointsTransactions, aucune entité "prêt" stockée séparément). */
+  lendPoints: (fromChildId: string, toChildId: string, amount: number, note: string, actorId: string) => boolean
+  /** Remboursement total ou partiel d'un prêt — loanId = id de la transaction 'points_loan_sent'. */
+  repayLoan: (loanId: string, amount: number, actorId: string) => boolean
+  /** Attribution (ou retrait, montant négatif) libre de points par un parent, hors tâche/badge/série. */
+  adjustPoints: (childId: string, amount: number, reason: string, actorId: string) => boolean
+  /**
+   * Annule le déblocage d'un badge pour un enfant précis (erreur de paramétrage à la création,
+   * ex : seuil trop bas ayant débloqué le badge rétroactivement) : reprend les points crédités
+   * et efface le claim. Si les critères du badge restent remplis par ailleurs, il pourra se
+   * redéclencher tout seul au prochain checkRewards — corriger le badge d'abord si besoin.
+   */
+  revokeBadgeClaim: (childId: string, badgeDefId: string, actorId: string) => boolean
+
   /** Idée de tâche proposée par un enfant — voir approveTaskSuggestion/rejectTaskSuggestion. */
   proposeTaskSuggestion: (
     childId: string,
@@ -458,6 +476,9 @@ const useRealStore = create<Store>((set, get) => {
       type,
       amount,
       description: `${title}${capped ? ' (plafond hebdo)' : ''}`,
+      // Relie la transaction à son claim (voir revokeBadgeClaim) : permet de retrouver et
+      // reverser précisément les points d'un badge donné, sans dépendre du texte de description.
+      relatedTo: claim.id,
       createdBy: actorId,
       createdAt: Date.now(),
     }
@@ -1756,6 +1777,256 @@ const useRealStore = create<Store>((set, get) => {
       persist('pointsTransactions')
       persist('transactions')
       get().toast(`${formatEuro(cents)} ajoutés à ton solde !`)
+      return true
+    },
+
+    giftPoints: (fromChildId, toChildId, amount, note, actorId) => {
+      if (fromChildId === toChildId || !Number.isInteger(amount) || amount <= 0) return false
+      const { users, pointsTransactions } = get()
+      const from = users.find((u) => u.id === fromChildId)
+      const to = users.find((u) => u.id === toChildId)
+      if (!from || !to) return false
+      if (amount > computePoints(pointsTransactions, fromChildId)) {
+        get().toast('Pas assez de points pour ce don.', 'error')
+        return false
+      }
+      const trimmedNote = note.trim()
+      const sent: PointsTransaction = {
+        id: uid(),
+        childId: fromChildId,
+        type: 'points_gift_sent',
+        amount: -amount,
+        description: `🎁 Don à ${to.name}${trimmedNote ? ` — ${trimmedNote}` : ''}`,
+        createdBy: actorId,
+        createdAt: Date.now(),
+      }
+      const received: PointsTransaction = {
+        id: uid(),
+        childId: toChildId,
+        type: 'points_gift_received',
+        amount,
+        description: `🎁 Don de ${from.name}${trimmedNote ? ` — ${trimmedNote}` : ''}`,
+        relatedTo: sent.id,
+        createdBy: actorId,
+        createdAt: Date.now(),
+      }
+      set((s) => ({ pointsTransactions: [received, sent, ...s.pointsTransactions] }))
+      persist('pointsTransactions')
+      pushLog(
+        'points_gift',
+        actorId,
+        `${from.name} → ${to.name} : ${amount} pts offerts${trimmedNote ? ` — ${trimmedNote}` : ''}`,
+        fromChildId,
+        -amount,
+        sent.id,
+      )
+      notify(
+        toChildId,
+        'points_received',
+        'Cadeau reçu ! 🎁',
+        `${from.name} t'offre ${amount} points${trimmedNote ? ` — ${trimmedNote}` : ''}`,
+        '🎁',
+        '/enfant/profil',
+      )
+      notifyParents('points_received', 'Don entre enfants', `${from.name} a offert ${amount} points à ${to.name}.`, '🎁')
+      return true
+    },
+
+    lendPoints: (fromChildId, toChildId, amount, note, actorId) => {
+      if (fromChildId === toChildId || !Number.isInteger(amount) || amount <= 0) return false
+      const { users, pointsTransactions } = get()
+      const from = users.find((u) => u.id === fromChildId)
+      const to = users.find((u) => u.id === toChildId)
+      if (!from || !to) return false
+      if (amount > computePoints(pointsTransactions, fromChildId)) {
+        get().toast('Pas assez de points pour ce prêt.', 'error')
+        return false
+      }
+      const trimmedNote = note.trim()
+      const sent: PointsTransaction = {
+        id: uid(),
+        childId: fromChildId,
+        type: 'points_loan_sent',
+        amount: -amount,
+        description: `🤝 Prêt à ${to.name}${trimmedNote ? ` — ${trimmedNote}` : ''}`,
+        createdBy: actorId,
+        createdAt: Date.now(),
+      }
+      const received: PointsTransaction = {
+        id: uid(),
+        childId: toChildId,
+        type: 'points_loan_received',
+        amount,
+        description: `🤝 Prêt de ${from.name}${trimmedNote ? ` — ${trimmedNote}` : ''}`,
+        relatedTo: sent.id,
+        createdBy: actorId,
+        createdAt: Date.now(),
+      }
+      set((s) => ({ pointsTransactions: [received, sent, ...s.pointsTransactions] }))
+      persist('pointsTransactions')
+      pushLog(
+        'points_loan',
+        actorId,
+        `${from.name} → ${to.name} : ${amount} pts prêtés${trimmedNote ? ` — ${trimmedNote}` : ''}`,
+        fromChildId,
+        -amount,
+        sent.id,
+      )
+      notify(
+        toChildId,
+        'points_received',
+        'Prêt reçu 🤝',
+        `${from.name} te prête ${amount} points${trimmedNote ? ` — ${trimmedNote}` : ''}`,
+        '🤝',
+        '/enfant/profil',
+      )
+      notifyParents('points_received', 'Prêt entre enfants', `${from.name} a prêté ${amount} points à ${to.name}.`, '🤝')
+      return true
+    },
+
+    repayLoan: (loanId, amount, actorId) => {
+      if (!Number.isInteger(amount) || amount <= 0) return false
+      const { pointsTransactions, users } = get()
+      const loan = computeLoans(pointsTransactions).find((l) => l.id === loanId)
+      if (!loan || loan.status === 'repaid') return false
+      if (amount > loan.remaining) {
+        get().toast(`Ce prêt n'a plus que ${loan.remaining} points à rembourser.`, 'error')
+        return false
+      }
+      if (amount > computePoints(pointsTransactions, loan.borrowerId)) {
+        get().toast('Pas assez de points pour rembourser ce montant.', 'error')
+        return false
+      }
+      const lender = users.find((u) => u.id === loan.lenderId)
+      const borrower = users.find((u) => u.id === loan.borrowerId)
+      if (!lender || !borrower) return false
+      const repaySent: PointsTransaction = {
+        id: uid(),
+        childId: loan.borrowerId,
+        type: 'points_loan_repay_sent',
+        amount: -amount,
+        description: `Remboursement à ${lender.name}`,
+        relatedTo: loanId,
+        createdBy: actorId,
+        createdAt: Date.now(),
+      }
+      const repayReceived: PointsTransaction = {
+        id: uid(),
+        childId: loan.lenderId,
+        type: 'points_loan_repay_received',
+        amount,
+        description: `Remboursement de ${borrower.name}`,
+        relatedTo: loanId,
+        createdBy: actorId,
+        createdAt: Date.now(),
+      }
+      set((s) => ({ pointsTransactions: [repayReceived, repaySent, ...s.pointsTransactions] }))
+      persist('pointsTransactions')
+      const fullyRepaid = amount === loan.remaining
+      pushLog(
+        'points_loan_repaid',
+        actorId,
+        `${borrower.name} → ${lender.name} : ${amount} pts remboursés${
+          fullyRepaid ? ' (prêt soldé)' : ` (reste ${loan.remaining - amount})`
+        }`,
+        loan.borrowerId,
+        -amount,
+        loanId,
+      )
+      notify(
+        loan.lenderId,
+        'points_received',
+        'Remboursement reçu 💸',
+        `${borrower.name} te rembourse ${amount} points.`,
+        '💸',
+        '/enfant/profil',
+      )
+      notifyParents('points_received', 'Prêt remboursé', `${borrower.name} a remboursé ${amount} points à ${lender.name}.`, '💸')
+      return true
+    },
+
+    adjustPoints: (childId, amount, reason, actorId) => {
+      if (!Number.isInteger(amount) || amount === 0) return false
+      const child = get().users.find((u) => u.id === childId)
+      if (!child) return false
+      if (amount < 0 && computePoints(get().pointsTransactions, childId) + amount < 0) {
+        get().toast('Le solde de points passerait en négatif.', 'error')
+        return false
+      }
+      const trimmedReason = reason.trim()
+      const ptx: PointsTransaction = {
+        id: uid(),
+        childId,
+        type: 'manual_adjustment',
+        amount,
+        description: trimmedReason ? `Ajustement manuel — ${trimmedReason}` : 'Ajustement manuel',
+        createdBy: actorId,
+        createdAt: Date.now(),
+      }
+      set((s) => ({ pointsTransactions: [ptx, ...s.pointsTransactions] }))
+      persist('pointsTransactions')
+      pushLog(
+        'points_adjusted',
+        actorId,
+        `${amount > 0 ? '+' : ''}${amount} pts pour ${child.name}${trimmedReason ? ` — ${trimmedReason}` : ''}`,
+        childId,
+        amount,
+        ptx.id,
+      )
+      notify(
+        childId,
+        'points_received',
+        amount > 0 ? 'Points offerts par un parent 🎁' : 'Ajustement de points',
+        `${amount > 0 ? '+' : ''}${amount} points${trimmedReason ? ` — ${trimmedReason}` : ''}`,
+        amount > 0 ? '🎁' : '✏️',
+        '/enfant/profil',
+      )
+      return true
+    },
+
+    revokeBadgeClaim: (childId, badgeDefId, actorId) => {
+      const { rewardClaims, pointsTransactions, badgeDefs, users } = get()
+      const key = `badge:${badgeDefId}`
+      const claim = rewardClaims.find((r) => r.childId === childId && r.key === key)
+      if (!claim) return false
+      const def = badgeDefs.find((b) => b.id === badgeDefId)
+      const child = users.find((u) => u.id === childId)
+      // Les claims créés avant l'ajout du champ relatedTo (voir awardReward) n'ont pas de lien
+      // direct : on retombe alors sur la transaction 'badge' la plus récente au libellé attendu.
+      const ptx =
+        pointsTransactions.find((p) => p.relatedTo === claim.id && p.type === 'badge') ??
+        (def
+          ? pointsTransactions
+              .filter((p) => p.childId === childId && p.type === 'badge' && p.description === `Badge débloqué : ${def.emoji} ${def.label}`)
+              .sort((a, b) => b.createdAt - a.createdAt)[0]
+          : undefined)
+      const alreadyReversed = ptx && pointsTransactions.some((p) => p.relatedTo === ptx.id && p.type === 'badge_reverted')
+      set((s) => ({ rewardClaims: s.rewardClaims.filter((r) => r.id !== claim.id) }))
+      persist('rewardClaims')
+      if (ptx && !alreadyReversed) {
+        const reversal: PointsTransaction = {
+          id: uid(),
+          type: 'badge_reverted',
+          childId,
+          amount: -ptx.amount,
+          description: `Badge retiré : ${def?.emoji ?? '🏅'} ${def?.label ?? 'badge'} (correction)`,
+          relatedTo: ptx.id,
+          createdBy: actorId,
+          createdAt: Date.now(),
+        }
+        set((s) => ({ pointsTransactions: [reversal, ...s.pointsTransactions] }))
+        persist('pointsTransactions')
+      }
+      pushLog(
+        'badge_claim_revoked',
+        actorId,
+        `${def?.emoji ?? '🏅'} ${def?.label ?? 'badge'} retiré à ${child?.name ?? '?'}${
+          ptx && !alreadyReversed ? ` (-${ptx.amount} pts)` : ''
+        }`,
+        childId,
+        ptx && !alreadyReversed ? -ptx.amount : undefined,
+        claim.id,
+      )
       return true
     },
 

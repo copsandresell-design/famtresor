@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { KeyRound, Plus, RotateCcw, ScrollText } from 'lucide-react'
+import { Gift, KeyRound, Plus, RotateCcw, ScrollText } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatedBalance } from '../../components/ui/AnimatedBalance'
@@ -209,6 +209,74 @@ function EditChildModal({ child, onClose }: { child: User; onClose: () => void }
   )
 }
 
+/** Attribution ou retrait libre de points, hors création de tâche (ex : bonus ponctuel, correction). */
+function AdjustPointsModal({ child, balance, onClose }: { child: User; balance: number; onClose: () => void }) {
+  const user = useCurrentUser()
+  const adjustPoints = useStore((s) => s.adjustPoints)
+  const toast = useStore((s) => s.toast)
+  const [sign, setSign] = useState<'add' | 'remove'>('add')
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (!user) return null
+  const parsed = parseInt(amount, 10)
+  const valid = Number.isFinite(parsed) && parsed > 0 && (sign === 'add' || parsed <= balance)
+
+  function submit() {
+    if (!valid) return
+    setBusy(true)
+    const signed = sign === 'add' ? parsed : -parsed
+    const ok = adjustPoints(child.id, signed, reason, user!.id)
+    setBusy(false)
+    if (ok) {
+      toast(`${sign === 'add' ? '+' : '-'}${parsed} points pour ${child.name}.`)
+      onClose()
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Points pour ${child.name}`}>
+      <div className="space-y-4">
+        <Field label="Ajouter ou retirer ?">
+          <div className="flex gap-2">
+            <Button variant={sign === 'add' ? 'primary' : 'soft'} className="flex-1" onClick={() => setSign('add')}>
+              + Ajouter
+            </Button>
+            <Button variant={sign === 'remove' ? 'primary' : 'soft'} className="flex-1" onClick={() => setSign('remove')}>
+              − Retirer
+            </Button>
+          </div>
+        </Field>
+        <Field label={sign === 'remove' ? `Combien de points ? (solde actuel : ${balance})` : 'Combien de points ?'}>
+          <input
+            className={inputCls}
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            autoFocus
+          />
+        </Field>
+        <Field label="Motif (optionnel, mais utile pour le journal)">
+          <input
+            className={inputCls}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="ex : bonus pour l'avoir aidé sans qu'on demande"
+            maxLength={80}
+          />
+        </Field>
+        <Button className="w-full" disabled={!valid || busy} onClick={submit}>
+          {sign === 'add' ? 'Ajouter les points' : 'Retirer les points'}
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 export function ChildrenPage() {
   const user = useCurrentUser()
   const users = useStore((s) => s.users)
@@ -226,6 +294,7 @@ export function ChildrenPage() {
   const [editing, setEditing] = useState<User | null>(null)
   const [resetting, setResetting] = useState<User | null>(null)
   const [creating, setCreating] = useState(false)
+  const [adjusting, setAdjusting] = useState<User | null>(null)
 
   if (!user) return null
 
@@ -293,6 +362,10 @@ export function ChildrenPage() {
                 <RotateCcw size={15} />
                 Réinitialiser solde
               </Button>
+              <Button variant="soft" size="sm" onClick={() => setAdjusting(child)}>
+                <Gift size={15} />
+                Points
+              </Button>
               <Link to="/parent/journal">
                 <Button variant="soft" size="sm">
                   <ScrollText size={15} />
@@ -317,6 +390,13 @@ export function ChildrenPage() {
 
       {creating && <CreateProfileModal onClose={() => setCreating(false)} />}
       {editing && <EditChildModal child={editing} onClose={() => setEditing(null)} />}
+      {adjusting && (
+        <AdjustPointsModal
+          child={adjusting}
+          balance={computePoints(pointsTransactions, adjusting.id)}
+          onClose={() => setAdjusting(null)}
+        />
+      )}
       <ConfirmModal
         open={resetting !== null}
         onClose={() => setResetting(null)}

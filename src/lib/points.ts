@@ -1,7 +1,18 @@
 import { isSameWeek } from 'date-fns'
-import type { PointsTransaction, WeeklyPointsCapSettings } from '../types'
+import type { PointsTransaction, PointsTransactionType, WeeklyPointsCapSettings } from '../types'
 
 const WEEK = { weekStartsOn: 1 as const }
+
+/**
+ * Points reçus d'un don/prêt/remboursement : comptent dans le solde dépensable (computePoints)
+ * mais jamais dans les points à vie (rangs) — sinon deux enfants pourraient se renvoyer des
+ * points en boucle pour gonfler leur rang sans rien faire de plus.
+ */
+const TRANSFER_RECEIVED_TYPES = new Set<PointsTransactionType>([
+  'points_gift_received',
+  'points_loan_received',
+  'points_loan_repay_received',
+])
 
 export function computePoints(pointsTransactions: PointsTransaction[], childId: string): number {
   return pointsTransactions.filter((p) => p.childId === childId).reduce((sum, p) => sum + p.amount, 0)
@@ -50,6 +61,6 @@ export function capWeeklyGain(
  */
 export function computeLifetimePoints(pointsTransactions: PointsTransaction[], childId: string): number {
   return pointsTransactions
-    .filter((p) => p.childId === childId && p.amount > 0)
+    .filter((p) => p.childId === childId && p.amount > 0 && !TRANSFER_RECEIVED_TYPES.has(p.type))
     .reduce((sum, p) => sum + p.amount, 0)
 }

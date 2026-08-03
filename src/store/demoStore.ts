@@ -192,6 +192,26 @@ export const useDemoStore = create<Store>((set, get) => {
     proposeTaskSuggestion: () => blockToast(),
     approveTaskSuggestion: () => blockToast(),
     rejectTaskSuggestion: () => blockToast(),
+    giftPoints: () => {
+      blockToast()
+      return false
+    },
+    lendPoints: () => {
+      blockToast()
+      return false
+    },
+    repayLoan: () => {
+      blockToast()
+      return false
+    },
+    adjustPoints: () => {
+      blockToast()
+      return false
+    },
+    revokeBadgeClaim: () => {
+      blockToast()
+      return false
+    },
   }
 })
 

@@ -17,6 +17,10 @@ function ptx(amount: number, childId = CHILD, createdAt = NOW.getTime()): Points
   }
 }
 
+function transferPtx(type: PointsTransaction['type'], amount: number, childId = CHILD): PointsTransaction {
+  return { ...ptx(amount, childId), type }
+}
+
 describe('computePoints', () => {
   it('additionne les gains et dépenses d’un enfant', () => {
     const points = [ptx(20), ptx(-5), ptx(15)]
@@ -43,6 +47,18 @@ describe('computeLifetimePoints', () => {
     const points = [ptx(100), ptx(-90)]
     expect(computeLifetimePoints(points, CHILD)).toBe(100)
     expect(computePoints(points, CHILD)).toBe(10)
+  })
+
+  it('ignore les dons/prêts/remboursements reçus (pas de vrai gain)', () => {
+    const points = [
+      ptx(20),
+      transferPtx('points_gift_received', 50),
+      transferPtx('points_loan_received', 30),
+      transferPtx('points_loan_repay_received', 15),
+    ]
+    expect(computeLifetimePoints(points, CHILD)).toBe(20)
+    // Mais ça reste bien dépensable, juste pas compté pour le rang.
+    expect(computePoints(points, CHILD)).toBe(115)
   })
 })
 

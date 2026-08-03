@@ -216,17 +216,29 @@ export type NotificationType =
   | 'redemption_fulfilled'
   | 'task_suggestion_submitted'
   | 'task_suggestion_decided'
+  /** Don, prêt ou remboursement reçu d'un autre enfant, ou ajustement manuel d'un parent. */
+  | 'points_received'
 
 /** Monnaie séparée de l'argent : gagnée via tâches/badges/séries, dépensée dans la Boutique. */
 export type PointsTransactionType =
   | 'task_approval'
   | 'task_approval_reverted'
   | 'badge'
+  /** Retrait d'un badge débloqué par erreur (voir revokeBadgeClaim) — reprend les points crédités. */
+  | 'badge_reverted'
   | 'streak_bonus'
   | 'shop_redeem'
   | 'shop_refund'
   | 'points_to_money'
   | 'manual_adjustment'
+  /** Transfert entre enfants (voir lib/loans.ts) : don (aucun suivi de remboursement)… */
+  | 'points_gift_sent'
+  | 'points_gift_received'
+  /** …ou prêt (suivi de dette reconstruit depuis ces transactions, jamais stocké séparément). */
+  | 'points_loan_sent'
+  | 'points_loan_received'
+  | 'points_loan_repay_sent'
+  | 'points_loan_repay_received'
 
 export interface PointsTransaction {
   id: string

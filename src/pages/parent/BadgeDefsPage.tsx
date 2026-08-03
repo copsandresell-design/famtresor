@@ -1,5 +1,6 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { useState } from 'react'
+import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ConfirmModal } from '../../components/ui/ConfirmModal'
@@ -13,7 +14,7 @@ import { useDemoMode } from '../../store/demoStore'
 import { useFamilyAuthStore } from '../../store/familyAuthStore'
 import { usePremiumUpsellStore } from '../../store/premiumUpsellStore'
 import { useCurrentUser, useStore } from '../../store/useStore'
-import type { BadgeDef, BadgeDefParams, BadgeKind, Category } from '../../types'
+import type { BadgeDef, BadgeDefParams, BadgeKind, Category, User } from '../../types'
 
 const KIND_LABELS: Record<BadgeKind, string> = {
   lifetime_tasks: 'Volume de tâches validées (à vie)',
@@ -201,9 +202,63 @@ function BadgeDefModal({ def, onClose }: { def: BadgeDef | null; onClose: () => 
   )
 }
 
+/**
+ * Liste les enfants ayant débloqué ce badge (rewardClaims) et permet de retirer un déblocage
+ * fait par erreur — typiquement un seuil mal réglé à la création qui a débloqué le badge
+ * rétroactivement. Reprend les points crédités (voir revokeBadgeClaim dans useStore).
+ */
+function HoldersModal({ def, holders, onClose }: { def: BadgeDef; holders: User[]; onClose: () => void }) {
+  const user = useCurrentUser()
+  const revokeBadgeClaim = useStore((s) => s.revokeBadgeClaim)
+  const toast = useStore((s) => s.toast)
+  const [revoking, setRevoking] = useState<User | null>(null)
+
+  if (!user) return null
+
+  return (
+    <>
+      <Modal open onClose={onClose} title={`${def.emoji} ${def.label} — débloqué par`}>
+        <div className="space-y-3">
+          {holders.length === 0 && <EmptyState emoji="🔒" text="Personne ne l'a débloqué pour l'instant." />}
+          {holders.map((child) => (
+            <div key={child.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
+              <span className="text-sm font-semibold">{child.name}</span>
+              <Button variant="ghost" size="sm" className="text-rose-500" onClick={() => setRevoking(child)}>
+                Retirer
+              </Button>
+            </div>
+          ))}
+          <p className="text-xs text-slate-400">
+            Si les critères du badge sont toujours remplis, il pourra se redéclencher automatiquement — corrige
+            d'abord le badge (seuil, etc.) si tu veux l'empêcher de revenir.
+          </p>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        open={revoking !== null}
+        onClose={() => setRevoking(null)}
+        title="Retirer ce badge"
+        message={`« ${def.label} » sera retiré à ${revoking?.name}, et les points gagnés à ce déblocage lui seront repris.`}
+        confirmLabel="Oui, retirer"
+        danger
+        onConfirm={() => {
+          if (revoking) {
+            revokeBadgeClaim(revoking.id, def.id, user.id)
+            toast(`Badge retiré à ${revoking.name}.`)
+            setRevoking(null)
+          }
+        }}
+      />
+    </>
+  )
+}
+
 export function BadgeDefsPage() {
   const user = useCurrentUser()
   const badgeDefs = useStore((s) => s.badgeDefs)
+  const users = useStore((s) => s.users)
+  const rewardClaims = useStore((s) => s.rewardClaims)
   const saveBadgeDef = useStore((s) => s.saveBadgeDef)
   const deleteBadgeDef = useStore((s) => s.deleteBadgeDef)
   const toast = useStore((s) => s.toast)
@@ -214,6 +269,11 @@ export function BadgeDefsPage() {
 
   const [editing, setEditing] = useState<BadgeDef | 'new' | null>(null)
   const [deleting, setDeleting] = useState<BadgeDef | null>(null)
+  const [viewingHolders, setViewingHolders] = useState<BadgeDef | null>(null)
+
+  const children = users.filter((u) => u.role === 'child')
+  const holdersOf = (def: BadgeDef) =>
+    children.filter((c) => rewardClaims.some((r) => r.childId === c.id && r.key === `badge:${def.id}`))
 
   if (!user) return null
 
@@ -265,8 +325,10 @@ export function BadgeDefsPage() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {badgeDefs.map((def) => (
-          <Card key={def.id} className={`flex items-center gap-3 p-4 ${!def.isActive ? 'opacity-60' : ''}`}>
+        {badgeDefs.map((def) => {
+          const holderCount = holdersOf(def).length
+          return (
+          <Card key={def.id} className={`flex flex-wrap items-center gap-3 p-4 ${!def.isActive ? 'opacity-60' : ''}`}>
             <span className="text-2xl" aria-hidden>
               {def.emoji}
             </span>
@@ -275,6 +337,18 @@ export function BadgeDefsPage() {
               <p className="truncate text-xs text-slate-500 dark:text-slate-400">{def.description}</p>
               <p className="text-xs font-bold text-violet-600 dark:text-violet-400">+{def.points} pts</p>
             </div>
+            {holderCount > 0 && (
+              <button
+                onClick={() => setViewingHolders(def)}
+                className="shrink-0"
+                aria-label="Voir qui a débloqué ce badge"
+              >
+                <Badge tone="green" className="cursor-pointer">
+                  <Users size={12} />
+                  {holderCount}
+                </Badge>
+              </button>
+            )}
             <Switch
               checked={def.isActive}
               onChange={(isActive) => saveBadgeDef({ ...def, isActive }, user.id)}
@@ -295,11 +369,16 @@ export function BadgeDefsPage() {
               <Trash2 size={16} />
             </button>
           </Card>
-        ))}
+          )
+        })}
         {badgeDefs.length === 0 && <EmptyState emoji="🏅" text="Aucun badge défini." />}
       </div>
 
       {editing && <BadgeDefModal def={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
+
+      {viewingHolders && (
+        <HoldersModal def={viewingHolders} holders={holdersOf(viewingHolders)} onClose={() => setViewingHolders(null)} />
+      )}
 
       <ConfirmModal
         open={deleting !== null}

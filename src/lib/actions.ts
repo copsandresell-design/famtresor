@@ -51,6 +51,11 @@ export const ACTION_LABELS: Record<string, string> = {
   custom_notification_sent: 'Notification envoyée',
   daily_reminder_sent: 'Rappel quotidien envoyé',
   season_reset: 'Saison réinitialisée',
+  points_gift: 'Don de points entre enfants',
+  points_loan: 'Prêt de points entre enfants',
+  points_loan_repaid: 'Prêt remboursé',
+  points_adjusted: 'Points ajustés manuellement',
+  badge_claim_revoked: 'Badge retiré (correction)',
 }
 
 export function actionLabel(action: string): string {

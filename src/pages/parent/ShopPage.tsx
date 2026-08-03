@@ -390,30 +390,35 @@ export function ShopPage() {
       {tab === 'voeux' && (
         <div className="space-y-3">
           {wishes.map((item) => (
-            <Card key={item.id} className="flex items-center gap-3 p-4">
-              <span className="text-3xl" aria-hidden>
-                {item.icon}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold">{item.title}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Proposé par {nameOf(item.proposedBy)} · {formatRelative(item.createdAt)}
-                </p>
+            <Card key={item.id} className="p-4">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl" aria-hidden>
+                  {item.icon}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold">{item.title}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Proposé par {nameOf(item.proposedBy)} · {formatRelative(item.createdAt)}
+                  </p>
+                </div>
               </div>
-              <Button
-                size="sm"
-                variant="soft"
-                onClick={() => {
-                  rejectWish(item.id, user.id)
-                  toast('Vœu refusé.')
-                }}
-              >
-                <X size={16} />
-              </Button>
-              <Button size="sm" variant="success" onClick={() => setApprovingWish(item)}>
-                <Check size={16} />
-                Accepter
-              </Button>
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="soft"
+                  onClick={() => {
+                    rejectWish(item.id, user.id)
+                    toast('Vœu refusé.')
+                  }}
+                >
+                  <X size={16} />
+                  Refuser
+                </Button>
+                <Button size="sm" variant="success" onClick={() => setApprovingWish(item)}>
+                  <Check size={16} />
+                  Accepter
+                </Button>
+              </div>
             </Card>
           ))}
           {wishes.length === 0 && <EmptyState emoji="💭" text="Aucun vœu en attente." />}
@@ -428,37 +433,44 @@ export function ShopPage() {
               {pendingRedemptions.map((r) => {
                 const child = users.find((u) => u.id === r.childId)
                 return (
-                  <Card key={r.id} className="flex items-center gap-3 p-4">
-                    {child && <ChildAvatar user={child} size="sm" />}
-                    <span className="text-2xl" aria-hidden>
-                      {r.icon}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold">{r.title}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {r.cost} pts · {formatRelative(r.requestedAt)}
-                      </p>
+                  <Card key={r.id} className="p-4">
+                    <div className="flex items-center gap-3">
+                      {child && <ChildAvatar user={child} size="sm" />}
+                      <span className="text-2xl" aria-hidden>
+                        {r.icon}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold">{r.title}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {r.cost} pts · {formatRelative(r.requestedAt)}
+                        </p>
+                      </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="soft"
-                      onClick={() => {
-                        cancelRedemption(r.id, user.id)
-                        toast('Échange annulé, points remboursés.')
-                      }}
-                    >
-                      Annuler
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="success"
-                      onClick={() => {
-                        fulfillRedemption(r.id, user.id)
-                        toast('Lot marqué comme remis.')
-                      }}
-                    >
-                      Remis !
-                    </Button>
+                    {/* Actions sur leur propre ligne (flex-wrap) : sur petit écran, avatar + emoji +
+                        texte + 2 boutons sur une seule ligne débordait et forçait un défilement
+                        horizontal pour atteindre « Remis ! ». */}
+                    <div className="mt-3 flex flex-wrap justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="soft"
+                        onClick={() => {
+                          cancelRedemption(r.id, user.id)
+                          toast('Échange annulé, points remboursés.')
+                        }}
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="success"
+                        onClick={() => {
+                          fulfillRedemption(r.id, user.id)
+                          toast('Lot marqué comme remis.')
+                        }}
+                      >
+                        Remis !
+                      </Button>
+                    </div>
                   </Card>
                 )
               })}
