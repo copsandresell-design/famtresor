@@ -232,20 +232,26 @@ export function ChildShopPage() {
           const outOfStock = item.stock === 0
           const canAfford = item.cost !== undefined && points >= item.cost && !outOfStock
           return (
-            <Card key={item.id} className={cn('flex items-center gap-3 p-4', outOfStock && 'opacity-60')}>
-              <span className="text-3xl" aria-hidden>
-                {item.icon}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-bold">{item.title}</p>
-                <p className="text-xs font-semibold text-violet-600 dark:text-violet-400">
-                  {outOfStock ? 'Épuisé' : `${item.cost} pts`}
-                </p>
+            <Card key={item.id} className={cn('p-4', outOfStock && 'opacity-60')}>
+              <div className="flex items-center gap-3">
+                <span className="text-3xl" aria-hidden>
+                  {item.icon}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold">{item.title}</p>
+                  <p className="text-xs font-semibold text-violet-600 dark:text-violet-400">
+                    {outOfStock ? 'Épuisé' : `${item.cost} pts`}
+                  </p>
+                </div>
               </div>
+              {/* Bouton sur sa propre ligne, pleine largeur : icône + titre + prix + bouton sur
+                  une seule ligne dépassait la largeur de l'écran sur mobile (voir aussi le
+                  catalogue côté parent, ShopPage.tsx). */}
               <Button
                 size="sm"
                 variant={canAfford ? 'success' : 'soft'}
                 disabled={!canAfford}
+                className="mt-3 w-full"
                 onClick={() => {
                   const ok = redeemShopItem(user.id, item.id, user.id)
                   if (ok) {

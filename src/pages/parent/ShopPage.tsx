@@ -350,36 +350,45 @@ export function ShopPage() {
           {catalogue.map((item) => {
             const outOfStock = item.stock === 0
             return (
-              <Card key={item.id} className={cn('flex items-center gap-3 p-4', outOfStock && 'opacity-60')}>
-                <span className="text-3xl" aria-hidden>
-                  {item.icon}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">{item.title}</p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                    <Badge>{SHOP_CATEGORIES[item.category].label}</Badge>
-                    {outOfStock ? (
-                      <Badge tone="red">Épuisé</Badge>
-                    ) : (
-                      item.stock !== undefined && <Badge tone="amber">Stock : {item.stock}</Badge>
-                    )}
+              <Card key={item.id} className={cn('p-4', outOfStock && 'opacity-60')}>
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl" aria-hidden>
+                    {item.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold">{item.title}</p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                      <Badge>{SHOP_CATEGORIES[item.category].label}</Badge>
+                      {outOfStock ? (
+                        <Badge tone="red">Épuisé</Badge>
+                      ) : (
+                        item.stock !== undefined && <Badge tone="amber">Stock : {item.stock}</Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <span className="font-bold text-violet-600 dark:text-violet-400">{item.cost} pts</span>
-                <button
-                  onClick={() => requestEdit(item)}
-                  aria-label="Modifier ce lot"
-                  className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <Pencil size={16} />
-                </button>
-                <button
-                  onClick={() => setDeletingItem(item)}
-                  aria-label="Retirer ce lot"
-                  className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-950/40"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {/* Prix + actions sur leur propre ligne (même correctif que Vœux/Échanges
+                    ci-dessous) : icône + titre + badges + prix + 2 boutons sur une seule ligne
+                    dépassait la largeur de l'écran sur mobile. */}
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className="font-bold text-violet-600 dark:text-violet-400">{item.cost} pts</span>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => requestEdit(item)}
+                      aria-label="Modifier ce lot"
+                      className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => setDeletingItem(item)}
+                      aria-label="Retirer ce lot"
+                      className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-950/40"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
               </Card>
             )
           })}
