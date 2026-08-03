@@ -330,7 +330,7 @@ export function ChildrenPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {children.map((child) => {
           const rank = rankDefs.length > 0 ? computeRank(computeLifetimePoints(pointsTransactions, child.id), rankDefs) : null
           return (

@@ -118,7 +118,7 @@ function WeeklyRecapCard({
   return (
     <Card className="p-5">
       <h2 className="mb-4 text-lg font-bold">Récap de la semaine</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {recaps.map(({ child, weekPoints, weekTasks, activeStreaks, bestStreak }) => (
           <div key={child.id} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 dark:border-slate-800">
             <ChildAvatar user={child} size="sm" />
@@ -363,7 +363,7 @@ export function OverviewPage() {
 
       <div>
         <h2 className="mb-3 text-lg font-bold">Les enfants</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {children.map((child) => {
             const balance = computeBalance(transactions, child.id)
             const points = computePoints(pointsTransactions, child.id)

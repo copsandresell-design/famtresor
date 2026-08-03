@@ -227,7 +227,7 @@ export function ChildShopPage() {
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {catalogue.map((item) => {
           const outOfStock = item.stock === 0
           const canAfford = item.cost !== undefined && points >= item.cost && !outOfStock

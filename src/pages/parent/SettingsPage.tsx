@@ -374,7 +374,7 @@ export function SettingsPage() {
         <Field label="Nom de la famille">
           <input className={inputCls} value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
         </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Bonus initiative (points)">
             <input
               className={inputCls}
@@ -584,7 +584,7 @@ export function SettingsPage() {
                 onChange={(e) => setThresholdDays(e.target.value)}
               />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Montant de base (€)">
                 <input
                   className={inputCls}
@@ -797,7 +797,7 @@ export function SettingsPage() {
           Choisit les emojis et couleurs proposés pour les avatars des profils de la famille.
           {!isFounder && plan !== 'premium' && ' Premium débloque tous les packs.'}
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {themePacks.map((pack) => {
             const unlocked = demoActive || isPackUnlocked(pack, isFounder, plan, ownedPackIds)
             const active = pack.id === activePackId

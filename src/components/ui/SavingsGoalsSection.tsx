@@ -121,7 +121,7 @@ export function SavingsGoalsSection({
           Aucun objectif pour l'instant. {canCreate && 'Crée-en un pour te motiver à épargner !'}
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {goals.map((goal) => (
             <GoalCard
               key={goal.id}

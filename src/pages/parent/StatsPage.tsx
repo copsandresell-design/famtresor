@@ -142,7 +142,7 @@ export function StatsPage() {
 
       <div>
         <h2 className="mb-3 text-lg font-bold">Classement du mois</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {ranking.map((entry, i) => {
             const winner = i === 0 && entry.monthGains > 0
             const rank =
@@ -184,7 +184,7 @@ export function StatsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {perChild.map((entry) => (
           <Card key={entry.child.id} className="p-5">
             <div className="mb-4 flex items-center gap-3">
