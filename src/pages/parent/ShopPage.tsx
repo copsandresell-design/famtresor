@@ -364,6 +364,9 @@ export function ShopPage() {
                       ) : (
                         item.stock !== undefined && <Badge tone="amber">Stock : {item.stock}</Badge>
                       )}
+                      {/* Lot venu d'un vœu approuvé : réservé à l'enfant qui l'a demandé, les
+                          autres ne le voient pas dans leur catalogue (voir ChildShopPage.tsx). */}
+                      {item.proposedBy && <Badge>Réservé à {nameOf(item.proposedBy)}</Badge>}
                     </div>
                   </div>
                 </div>

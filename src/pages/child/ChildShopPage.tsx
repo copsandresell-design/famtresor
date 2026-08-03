@@ -201,7 +201,12 @@ export function ChildShopPage() {
   if (!user) return null
 
   const points = computePoints(pointsTransactions, user.id)
-  const catalogue = shopItems.filter((i) => i.status === 'active')
+  // Un lot venu d'un vœu approuvé (proposedBy défini) reste réservé à l'enfant qui l'a demandé —
+  // seuls les lots créés directement par un parent (proposedBy absent) sont partagés entre tous
+  // les enfants. Voir aussi redeemShopItem dans useStore.ts (même règle appliquée côté store).
+  const catalogue = shopItems.filter(
+    (i) => i.status === 'active' && (!i.proposedBy || i.proposedBy === user.id),
+  )
   const myWishes = shopItems.filter((i) => i.status === 'proposed' && i.proposedBy === user.id)
   const myRedemptions = redemptions.filter((r) => r.childId === user.id).slice(0, 10)
 

@@ -1639,6 +1639,13 @@ const useRealStore = create<Store>((set, get) => {
     redeemShopItem: (childId, itemId, actorId) => {
       const item = get().shopItems.find((i) => i.id === itemId)
       if (!item || item.status !== 'active' || item.cost === undefined) return false
+      // Un lot venu d'un vœu approuvé reste réservé à l'enfant qui l'a demandé (voir aussi le
+      // filtre du catalogue dans ChildShopPage.tsx) — vérifié ici aussi pour ne pas dépendre
+      // uniquement du fait que le bouton soit masqué côté UI.
+      if (item.proposedBy && item.proposedBy !== childId) {
+        get().toast('Ce lot vient du vœu d\'un autre enfant.', 'error')
+        return false
+      }
       if (item.stock !== undefined && item.stock <= 0) {
         get().toast('Ce lot est épuisé.', 'error')
         return false
